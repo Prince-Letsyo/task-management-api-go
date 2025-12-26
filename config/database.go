@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/Prince-Letsyo/task-management-api-go/internal/domain"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/oarkflow/log"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -81,7 +81,7 @@ func (d *DatabaseConfig) Setup() error {
 	if err != nil {
 		panic(err)
 	}
-	if err := d.DB.Use(
+	if err := d.Use(
 		dbresolver.Register(dbresolver.Config{}).
 			SetConnMaxLifetime(d.Default.MaxConnLifetime).
 			SetMaxIdleConns(100).
@@ -93,16 +93,16 @@ func (d *DatabaseConfig) Setup() error {
 	return nil //nolint:wsl
 }
 
-func (d *DatabaseConfig) Paginate(filters *domain.Filters) func(db *gorm.DB) *gorm.DB {
+func (d *DatabaseConfig) Paginate(filters *pkg.Filters) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if filters.Offset <= 0 {
 			filters.Offset = 1
 		}
 		switch {
-		case filters.Limit > domain.MaxPageLimit:
-			filters.Limit = domain.MaxPageLimit
+		case filters.Limit > pkg.MaxPageLimit:
+			filters.Limit = pkg.MaxPageLimit
 		case filters.Limit <= 0:
-			filters.Limit = domain.DefaultPageLimit
+			filters.Limit = pkg.DefaultPageLimit
 		}
 
 		dbClone := db.Session(&gorm.Session{})

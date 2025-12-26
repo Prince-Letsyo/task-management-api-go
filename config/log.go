@@ -14,7 +14,7 @@ type FileLog struct {
 
 type ConsoleLog struct {
 	Level string `mapstructure:"CONSOLE_LOG_LEVEL" yaml:"level" env-default:"info"`
-	Show  string `mapstructure:"CONSOLE_LOG_SHOW" yaml:"show" env-default:"false"`
+	Show  bool   `mapstructure:"CONSOLE_LOG_SHOW" yaml:"show" env-default:"false"`
 }
 
 type LogConfig struct {
