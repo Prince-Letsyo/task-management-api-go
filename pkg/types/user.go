@@ -1,4 +1,4 @@
-package user
+package types
 
 import "github.com/Prince-Letsyo/task-management-api-go/pkg"
 
@@ -9,6 +9,7 @@ type User struct {
 	Email         string `json:"email" `
 	Password      string `json:"-" `
 	EmailVerified bool   `json:"email_verified" `
+	IsAdmin       bool   `json:"is_admin" `
 }
 
 type UserFilters struct {
@@ -20,4 +21,12 @@ type UserFilters struct {
 type UserPage struct {
 	pkg.Page
 	Data *[]User `json:"data"`
+}
+
+type IUserService interface {
+	ViewByID(id uint, user *User) (*User, error)
+	ViewByEmail(email string, user *User) (*User, error)
+	ViewVerifiedUserByEmail(email string, user *User) (*User, error)
+	List(filters *UserFilters) (*UserPage, error)
+	Modify(id uint, user *User) (*User, error)
 }

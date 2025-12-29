@@ -5,23 +5,24 @@ import (
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/model"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )
 
 type IUserRepository interface {
-	retrieveById(id uint, user *User) (*User, error)
-	retrieveByEmail(email string, user *User) (*User, error)
-	retrieveVerifiedUserByEmail(email string, user *User) (*User, error)
-	retrievePage(filters *UserFilters) (*UserPage, error)
-	update(id uint, user *User) (*User, error)
+	retrieveById(id uint, user *types.User) (*types.User, error)
+	retrieveByEmail(email string, user *types.User) (*types.User, error)
+	retrieveVerifiedUserByEmail(email string, user *types.User) (*types.User, error)
+	retrievePage(filters *types.UserFilters) (*types.UserPage, error)
+	update(id uint, user *types.User) (*types.User, error)
 }
 
 type DBUserRepository struct {
 	dbConfig config.DatabaseConfig
 }
 
-func (dbUserRepository *DBUserRepository) retrieveById(id uint, user *User) (*User, error) {
+func (dbUserRepository *DBUserRepository) retrieveById(id uint, user *types.User) (*types.User, error) {
 	connDB := dbUserRepository.dbConfig.Begin()
 	if err := connDB.Model(&model.User{}).
 		Where("id = ? ", id).First(user); err.Error != nil {
@@ -35,7 +36,7 @@ func (dbUserRepository *DBUserRepository) retrieveById(id uint, user *User) (*Us
 	return user, nil
 }
 
-func (dbUserRepository *DBUserRepository) retrieveByEmail(email string, user *User) (*User, error) {
+func (dbUserRepository *DBUserRepository) retrieveByEmail(email string, user *types.User) (*types.User, error) {
 	connDB := dbUserRepository.dbConfig.Begin()
 	if err := connDB.Where(&model.User{Email: email}).
 		First(&user); err.Error != nil {
@@ -49,7 +50,7 @@ func (dbUserRepository *DBUserRepository) retrieveByEmail(email string, user *Us
 	return user, nil
 }
 
-func (dbUserRepository *DBUserRepository) retrieveVerifiedUserByEmail(email string, user *User) (*User, error) {
+func (dbUserRepository *DBUserRepository) retrieveVerifiedUserByEmail(email string, user *types.User) (*types.User, error) {
 	connDB := dbUserRepository.dbConfig.Begin()
 	if err := connDB.
 		Where(&model.User{Email: email, EmailVerified: true}).
@@ -63,8 +64,8 @@ func (dbUserRepository *DBUserRepository) retrieveVerifiedUserByEmail(email stri
 	return user, nil
 }
 
-func (dbUserRepository *DBUserRepository) retrievePage(filters *UserFilters) (*UserPage, error) {
-	users := []User{}
+func (dbUserRepository *DBUserRepository) retrievePage(filters *types.UserFilters) (*types.UserPage, error) {
+	users := []types.User{}
 	err := dbUserRepository.dbConfig.Begin().
 		Model(&model.User{}).
 		Scopes(dbUserRepository.dbConfig.Paginate(&filters.Filters)).
@@ -72,7 +73,7 @@ func (dbUserRepository *DBUserRepository) retrievePage(filters *UserFilters) (*U
 	if err.Error != nil {
 		return nil, err.Error
 	}
-	return &UserPage{
+	return &types.UserPage{
 		Page: pkg.Page{
 			Filters: pkg.Filters{
 				Limit:  filters.Limit,
@@ -85,7 +86,7 @@ func (dbUserRepository *DBUserRepository) retrievePage(filters *UserFilters) (*U
 	}, nil
 }
 
-func (dbUserRepository *DBUserRepository) update(id uint, user *User) (*User, error) {
+func (dbUserRepository *DBUserRepository) update(id uint, user *types.User) (*types.User, error) {
 	connDB := dbUserRepository.dbConfig.Begin()
 	defer connDB.Commit()
 	if err := connDB.Model(&model.User{}).

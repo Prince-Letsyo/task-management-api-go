@@ -1,6 +1,9 @@
 package auth
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/gofiber/fiber/v2"
+)
 
 type IAuthController interface {
 	login() fiber.Handler
@@ -35,7 +38,7 @@ func newHttpController(cfgs ...httpConfiguration) (*httpController, error) {
 	return acs, nil
 }
 
-func withAuthRepository(auth Auth, authIJwt IJWT) httpConfiguration {
+func withAuthRepository(auth Auth, authIJwt config.IJWT) httpConfiguration {
 	ahc := newAuthController(auth, authIJwt)
 	return authRepository(ahc)
 }

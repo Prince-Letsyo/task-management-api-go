@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/user"
 	"github.com/gofiber/fiber/v2"
 )
@@ -23,11 +24,11 @@ func LoadAuthRoutes(router fiber.Router) {
 	if _, err := newHttpController(
 		withAuthRepository(
 			Auth{
-				router:   router.Group("/auth"),
-				user:     userService,
-				register: registerService,
-				login:    loginService,
-			}, NewJWT())); err != nil {
+				router:          router.Group("/auth"),
+				userService:     userService,
+				registerService: registerService,
+				loginService:    loginService,
+			}, config.NewJWT())); err != nil {
 		panic(err.Error())
 	}
 }

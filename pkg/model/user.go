@@ -16,4 +16,5 @@ type User struct {
 	Email         string         `json:"email" gorm:"email"`
 	Password      string         `json:"-" gorm:"password"`
 	EmailVerified bool           `json:"email_verified" gorm:"email_verified"`
+	IsAdmin       bool           `json:"is_admin" gorm:"is_admin"`
 }

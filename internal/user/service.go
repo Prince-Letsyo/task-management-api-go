@@ -1,20 +1,15 @@
 package user
 
-import "github.com/pkg/errors"
-
-type IUserService interface {
-	ViewByID(id uint, user *User) (*User, error)
-	ViewByEmail(email string, user *User) (*User, error)
-	ViewVerifiedUserByEmail(email string, user *User) (*User, error)
-	List(filters *UserFilters) (*UserPage, error)
-	Modify(id uint, user *User) (*User, error)
-}
+import (
+	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
+	"github.com/pkg/errors"
+)
 
 type UserService struct {
 	IUserRepository
 }
 
-func (us *UserService) ViewByID(id uint, user *User) (*User, error) {
+func (us *UserService) ViewByID(id uint, user *types.User) (*types.User, error) {
 	u, errUser := us.retrieveById(id, user)
 	if errUser != nil {
 		return nil, errUser
@@ -22,7 +17,7 @@ func (us *UserService) ViewByID(id uint, user *User) (*User, error) {
 	return u, nil
 }
 
-func (us *UserService) ViewByEmail(email string, user *User) (*User, error) {
+func (us *UserService) ViewByEmail(email string, user *types.User) (*types.User, error) {
 	u, errUser := us.retrieveByEmail(email, user)
 	if errUser != nil {
 		return nil, errUser
@@ -30,7 +25,7 @@ func (us *UserService) ViewByEmail(email string, user *User) (*User, error) {
 	return u, nil
 }
 
-func (us *UserService) ViewVerifiedUserByEmail(email string, user *User) (*User, error) {
+func (us *UserService) ViewVerifiedUserByEmail(email string, user *types.User) (*types.User, error) {
 	u, errUser := us.retrieveVerifiedUserByEmail(email, user)
 	if errUser != nil {
 		return nil, errUser
@@ -38,7 +33,7 @@ func (us *UserService) ViewVerifiedUserByEmail(email string, user *User) (*User,
 	return u, nil
 }
 
-func (us *UserService) List(filters *UserFilters) (*UserPage, error) {
+func (us *UserService) List(filters *types.UserFilters) (*types.UserPage, error) {
 	p, err := us.retrievePage(filters)
 	if err != nil {
 		return nil, err
@@ -46,7 +41,7 @@ func (us *UserService) List(filters *UserFilters) (*UserPage, error) {
 	return p, nil
 }
 
-func (us *UserService) Modify(id uint, user *User) (*User, error) {
+func (us *UserService) Modify(id uint, user *types.User) (*types.User, error) {
 	b, err := us.update(id, user)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot update user")

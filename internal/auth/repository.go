@@ -5,23 +5,23 @@ import (
 
 	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
 	"github.com/Prince-Letsyo/task-management-api-go/config"
-	"github.com/Prince-Letsyo/task-management-api-go/internal/user"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/model"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"gorm.io/gorm"
 )
 
 type IRegisterRepository interface {
-	store(register *RegisterForm) (*RegisterForm, error)
-	updatePassword(id uint, passwordReset *PasswordResetForm) (*RegisterForm, error)
+	store(register *types.RegisterForm) (*types.RegisterForm, error)
+	updatePassword(id uint, passwordReset *types.PasswordResetForm) (*types.RegisterForm, error)
 }
 
 type DBRegisterRepository struct {
 	dbConfig    config.DatabaseConfig
-	userService user.IUserService
+	userService types.IUserService
 }
 
-func NewDBRegisterRepository(userService user.IUserService) *DBRegisterRepository {
+func NewDBRegisterRepository(userService types.IUserService) *DBRegisterRepository {
 	dbConfig := app.Http.Database
 	return &DBRegisterRepository{
 		dbConfig:    dbConfig,
@@ -29,7 +29,7 @@ func NewDBRegisterRepository(userService user.IUserService) *DBRegisterRepositor
 	}
 }
 
-func hashPswd(register *RegisterForm) (err error) {
+func hashPswd(register *types.RegisterForm) (err error) {
 	if register.CPassword != register.Password {
 		return errors.New("passwords do not match")
 	}
@@ -42,15 +42,15 @@ func hashPswd(register *RegisterForm) (err error) {
 	return nil
 }
 
-func (dbRegisterRepository *DBRegisterRepository) store(register *RegisterForm) (*RegisterForm, error) {
-	registerModel := &model.RegisterForm{
+func (dbRegisterRepository *DBRegisterRepository) store(register *types.RegisterForm) (*types.RegisterForm, error) {
+	registerModel := &types.RegisterForm{
 		FirstName: register.FirstName,
 		LastName:  register.LastName,
 		Email:     register.Email,
 		Password:  register.Password,
 		CPassword: register.Password,
 	}
-	user := &user.User{}
+	user := &types.User{}
 
 	u, _ := dbRegisterRepository.userService.ViewByEmail(register.Email, user)
 	if u != nil {
@@ -67,7 +67,7 @@ func (dbRegisterRepository *DBRegisterRepository) store(register *RegisterForm) 
 		return nil, err.Error
 	}
 
-	return &RegisterForm{
+	return &types.RegisterForm{
 		ID:        registerModel.ID,
 		FirstName: registerModel.FirstName,
 		LastName:  registerModel.LastName,
@@ -77,10 +77,10 @@ func (dbRegisterRepository *DBRegisterRepository) store(register *RegisterForm) 
 	}, nil
 }
 
-func (dbRegisterRepository *DBRegisterRepository) updatePassword(id uint, passwordReset *PasswordResetForm) (*RegisterForm, error) {
+func (dbRegisterRepository *DBRegisterRepository) updatePassword(id uint, passwordReset *types.PasswordResetForm) (*types.RegisterForm, error) {
 	connDB := dbRegisterRepository.dbConfig.Begin()
 	defer connDB.Commit()
-	register := &RegisterForm{
+	register := &types.RegisterForm{
 		Password:  passwordReset.Password,
 		CPassword: passwordReset.CPassword,
 	}

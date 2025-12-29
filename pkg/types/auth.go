@@ -1,9 +1,4 @@
-package auth
-
-import (
-	"github.com/Prince-Letsyo/task-management-api-go/internal/user"
-	"github.com/gofiber/fiber/v2"
-)
+package types
 
 type RegisterForm struct {
 	ID        uint   `json:"id"`
@@ -33,13 +28,11 @@ type PasswordResetForm struct {
 	CPassword string `json:"c_password" form:"c_password" validate:"required"`
 }
 
-type Auth struct {
-	router   fiber.Router
-	user     user.IUserService
-	register IRegisterService
-	login    ILoginService
+type IRegisterService interface {
+	NewRegisterService(register *RegisterForm) (*RegisterForm, error)
+	ModifyPassword(id uint, passwordReset *PasswordResetForm) (*RegisterForm, error)
 }
-type UserAuth struct {
-	router fiber.Router
-	user   user.IUserService
+
+type ILoginService interface {
+	CheckLogin(login *Login) (*User, error)
 }

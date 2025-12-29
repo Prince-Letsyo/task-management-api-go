@@ -3,13 +3,9 @@ package auth
 import (
 	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/user"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/pkg/errors"
 )
-
-type IRegisterService interface {
-	newRegisterServicee(register *RegisterForm) (*RegisterForm, error)
-	modifyPassword(id uint, passwordReset *PasswordResetForm) (*RegisterForm, error)
-}
 
 type RegisterServiceConfiguration func(rs *RegisterService) error
 
@@ -45,7 +41,7 @@ func withRegisterRepository(registerServiceRepository IRegisterRepository) Regis
 	}
 }
 
-func (registerService *RegisterService) newRegisterServicee(register *RegisterForm) (*RegisterForm, error) {
+func (registerService *RegisterService) NewRegisterService(register *types.RegisterForm) (*types.RegisterForm, error) {
 	r, errbook := registerService.store(register)
 	if errbook != nil {
 		return nil, errbook
@@ -53,7 +49,7 @@ func (registerService *RegisterService) newRegisterServicee(register *RegisterFo
 	return r, nil
 }
 
-func (registerService *RegisterService) modifyPassword(id uint, passwordReset *PasswordResetForm) (*RegisterForm, error) {
+func (registerService *RegisterService) ModifyPassword(id uint, passwordReset *types.PasswordResetForm) (*types.RegisterForm, error) {
 	b, err := registerService.updatePassword(id, passwordReset)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot update user password")
@@ -61,14 +57,10 @@ func (registerService *RegisterService) modifyPassword(id uint, passwordReset *P
 	return b, nil
 }
 
-type ILoginService interface {
-	checkLogin(login *Login) (*user.User, error)
-}
-
 type LoginServiceConfiguration func(ls *LoginService) error
 
 type LoginService struct {
-	user.IUserService
+	types.IUserService
 }
 
 // NewLoginService returns new LoginService.
@@ -91,15 +83,15 @@ func withDatabaseLoginRepository() LoginServiceConfiguration {
 	return withLoginRepository(userService)
 }
 
-func withLoginRepository(userService user.IUserService) LoginServiceConfiguration {
+func withLoginRepository(userService types.IUserService) LoginServiceConfiguration {
 	return func(loginService *LoginService) error {
 		loginService.IUserService = userService
 		return nil
 	}
 }
 
-func (loginService *LoginService) checkLogin(login *Login) (*user.User, error) {
-	user := &user.User{}
+func (loginService *LoginService) CheckLogin(login *types.Login) (*types.User, error) {
+	user := &types.User{}
 	_, errUser := loginService.ViewByEmail(login.Email, user)
 
 	if errUser != nil {
