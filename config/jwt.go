@@ -126,6 +126,7 @@ type UserClaims struct {
 	Id    string `json:"id"`
 	First string `json:"first"`
 	Last  string `json:"last"`
+	Email string `json:email`
 	jwt.RegisteredClaims
 }
 
@@ -241,6 +242,7 @@ func NewUserClaims(user types.User, expire int64) IUserClaims {
 		Id:    strconv.Itoa(int(user.ID)),
 		First: user.FirstName,
 		Last:  user.LastName,
+		Email: user.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expire) * time.Second)),
