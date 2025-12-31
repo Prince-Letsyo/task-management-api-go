@@ -10,6 +10,7 @@ import (
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/session"
 )
 
 type (
@@ -24,6 +25,7 @@ type (
 		Logout(c *fiber.Ctx) error
 		AccessTokenCreate(c *fiber.Ctx, user *types.User) error
 		RefreshTokenCreate(c *fiber.Ctx, user *types.User) error
+		getAccountSession(duration time.Duration, c *fiber.Ctx) (*session.Session, error)
 	}
 	IAdapterService interface {
 		SendPasswordResetEmail(email string, baseURL string)
@@ -36,6 +38,7 @@ type (
 		Logout(c *fiber.Ctx) error
 		AccessTokenCreate(c *fiber.Ctx, user *types.User) error
 		RefreshTokenCreate(c *fiber.Ctx, user *types.User) error
+		getAAccountSession(duration time.Duration, c *fiber.Ctx) (*session.Session, error)
 	}
 )
 
@@ -81,6 +84,10 @@ func (adapter *accountAdapterService) UserClaims(c *fiber.Ctx) (*config.UserClai
 
 func (adapter *accountAdapterService) User(c *fiber.Ctx) (*types.User, error) {
 	return adapter.adapterType.User(c)
+}
+
+func (adapter *accountAdapterService) getAccountSession(duration time.Duration, c *fiber.Ctx) (*session.Session, error) {
+	return adapter.adapterType.getAAccountSession(duration, c)
 }
 
 func NewAccountAdapterService(adapterType IAdapterService) IAccountAdapterService {
@@ -177,16 +184,25 @@ func (adapter AccountAdapterService) IsLoggedIn(context *fiber.Ctx) bool {
 func (adapter AccountAdapterService) AccessTokenCreate(context *fiber.Ctx, user *types.User) error {
 	accessClaims := config.NewUserClaims(
 		*user,
-		int64(float64(adapter.IJWT.GetAPIConfig().Expire/4)),
+		adapter.GetAPIAccessExpireDuration(),
 	)
 	accesstoken, err := adapter.NewAccessToken(accessClaims)
 	if err != nil {
 		return err
 	}
-
 	expire, err := accessClaims.GetExpirationTime()
 
 	if err == nil {
+		if sess, err := adapter.getAccountSession(
+			time.Until(expire.Time),
+			context); err != nil {
+			return err
+		} else {
+			sess.Set("access-token", accesstoken)
+			if err = sess.Save(); err != nil {
+				return err
+			}
+		}
 		context.Cookie(&fiber.Cookie{
 			Name:        "access-token",
 			Value:       accesstoken,
@@ -204,7 +220,7 @@ func (adapter AccountAdapterService) AccessTokenCreate(context *fiber.Ctx, user 
 func (adapter AccountAdapterService) RefreshTokenCreate(context *fiber.Ctx, user *types.User) error {
 	refreshClaims := config.NewUserClaims(
 		*user,
-		adapter.IJWT.GetAPIConfig().Expire*24*7,
+		adapter.GetAPIRefreshExpireDuration(),
 	)
 	refreshtoken, err := adapter.NewRefreshToken(refreshClaims)
 	if err != nil {
@@ -213,12 +229,20 @@ func (adapter AccountAdapterService) RefreshTokenCreate(context *fiber.Ctx, user
 	expire, err := refreshClaims.GetExpirationTime()
 
 	if err == nil {
+		if sess, err := adapter.getAccountSession(time.Until(expire.Time), context); err != nil {
+			return err
+		} else {
+			sess.Set("refresh-token", refreshtoken)
+			if err = sess.Save(); err != nil {
+				return err
+			}
+		}
 		context.Cookie(&fiber.Cookie{
 			Name:        "refresh-token",
 			Value:       refreshtoken,
 			Secure:      false,
 			HTTPOnly:    true,
-			SessionOnly: false,
+			SessionOnly: true,
 			Expires:     expire.Time,
 		})
 	} else {
@@ -227,24 +251,22 @@ func (adapter AccountAdapterService) RefreshTokenCreate(context *fiber.Ctx, user
 	return nil
 }
 
-func (adapter AccountAdapterService) Login(context *fiber.Ctx, user *types.User) error {
-	session, errS := app.Http.Session.Get(context) // get/create new session
-	session.SetExpiry(time.Duration(adapter.IJWT.GetAPIConfig().Expire*24*7) * time.Second)
+func (adapter AccountAdapterService) getAccountSession(duration time.Duration, context *fiber.Ctx) (*session.Session, error) {
+	sess, errS := app.Http.Session.Get(context) // get/create new session
+	sess.SetExpiry(duration)
 	if errS != nil {
-		return errS
+		return &session.Session{}, errS
 	}
 
-	context.Locals("user_id", user.ID)
+	return sess, nil
+}
 
+func (adapter AccountAdapterService) Login(context *fiber.Ctx, user *types.User) error {
 	if err := adapter.AccessTokenCreate(context, user); err != nil {
 		return err
 	}
 
 	if err := adapter.RefreshTokenCreate(context, user); err != nil {
-		return err
-	}
-
-	if err := session.Save(); err != nil {
 		return err
 	}
 	return nil

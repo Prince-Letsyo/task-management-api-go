@@ -23,6 +23,8 @@ type (
 		NewRefreshToken(claims jwt.Claims) (string, error)
 		ParseAccessToken(accessToken string) (*UserClaims, error)
 		ParseRefreshToken(refreshToken string) (*UserClaims, error)
+		GetAPIAccessExpireDuration() time.Duration
+		GetAPIRefreshExpireDuration() time.Duration
 		DeleteToken(c *fiber.Ctx, token string) error
 		GetAPIConfig() *JwtConfig
 		GetAPPConfig() *JwtConfig
@@ -34,20 +36,11 @@ type JwtConfig struct {
 	Expire int64  `yaml:"expire"`
 }
 
-type Refresh struct {
-	Token  string
-	Expire string
-}
-
-type Access struct {
-	Token  string
-	Expire string
-}
 type JwtSecrets struct {
-	Refresh Refresh
-	Access  Access
-	App     JwtConfig `yaml:"app"`
-	Api     JwtConfig `yaml:"api"`
+	RefreshExpire int64     `yaml:"refresh_expire"`
+	AccessExpire  int64     `yaml:"access_expire"`
+	App           JwtConfig `yaml:"app"`
+	Api           JwtConfig `yaml:"api"`
 }
 
 func (tokenJWT *JwtSecrets) NewAccessToken(claims jwt.Claims) (string, error) {
@@ -116,6 +109,14 @@ func (tokenJWT *JwtSecrets) GetAPPConfig() *JwtConfig {
 
 func (tokenJWT *JwtSecrets) GetAPIConfig() *JwtConfig {
 	return &tokenJWT.Api
+}
+
+func (tokenJWT *JwtSecrets) GetAPIAccessExpireDuration() time.Duration {
+	return time.Duration(tokenJWT.AccessExpire) * time.Minute
+}
+
+func (tokenJWT *JwtSecrets) GetAPIRefreshExpireDuration() time.Duration {
+	return time.Duration(tokenJWT.RefreshExpire) * time.Hour
 }
 
 func NewJWT() IJWT {
@@ -237,7 +238,7 @@ func verifyNbf(nbf int64, now int64, required bool) bool {
 }
 
 // NewUserClaims returns new UserClaims.
-func NewUserClaims(user types.User, expire int64) IUserClaims {
+func NewUserClaims(user types.User, expire time.Duration) IUserClaims {
 	return &UserClaims{
 		Id:    strconv.Itoa(int(user.ID)),
 		First: user.FirstName,
@@ -245,7 +246,7 @@ func NewUserClaims(user types.User, expire int64) IUserClaims {
 		Email: user.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expire) * time.Second)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expire)),
 		},
 	}
 }

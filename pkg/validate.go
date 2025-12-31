@@ -68,7 +68,7 @@ func CustomQueryParser(c *fiber.Ctx, value interface{}) error {
 	return validateStruct(value)
 }
 
-func CustomBodyParser(c *fiber.Ctx, value interface{}) error {
+func CustomBodyParser(c *fiber.Ctx, value any) error {
 	if err := c.BodyParser(value); err != nil {
 		return err
 	}

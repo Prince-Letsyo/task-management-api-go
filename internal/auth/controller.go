@@ -100,7 +100,7 @@ func (controller *authController) ResendConfirmEmail() fiber.Handler {
 func (controller *authController) RequestPasswordRest() fiber.Handler {
 	return func(context *fiber.Ctx) error {
 		request_password_reset := &types.RequestPasswordResetForm{}
-		if errForm := context.BodyParser(request_password_reset); errForm != nil {
+		if errForm := pkg.CustomBodyParser(context, request_password_reset); errForm != nil {
 			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error":   errForm.Error(),
 				"message": "Error on request password reset request",
@@ -230,6 +230,24 @@ func (controller *authController) Login() fiber.Handler {
 			},
 		}
 		return context.Status(fiber.StatusOK).JSON(data)
+	}
+}
+
+func (controller *authController) Logout() fiber.Handler {
+	return func(context *fiber.Ctx) error {
+		data := fiber.Map{}
+
+		err := service.NewAccountAdapterService(
+			service.AccountAdapterService{
+				IUserService: controller.userService,
+				IJWT:         controller.IJWT,
+			}).Logout(context)
+		if err != nil {
+			data["error"] = err.Error()
+			return context.Status(fiber.StatusInternalServerError).JSON(data)
+		}
+
+		return context.Status(fiber.StatusNoContent).JSON(data)
 	}
 }
 
