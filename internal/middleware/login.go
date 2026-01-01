@@ -1,3 +1,4 @@
+// Package middleware
 package middleware
 
 import (
@@ -16,12 +17,13 @@ type (
 
 	ILoginValidator interface {
 		Validate(c *fiber.Ctx, login *types.Login) error
-		RedirectLogin(c *fiber.Ctx) error
+		RedirectLogin(c *fiber.Ctx, appConfig *config.AppCfg) error
 	}
 )
 
 type loginMiddleWare struct {
 	loginType ILoginValidator
+	*config.AppCfg
 }
 
 func (middleWare *loginMiddleWare) ValidateLoginPost(c *fiber.Ctx) error {
@@ -30,20 +32,19 @@ func (middleWare *loginMiddleWare) ValidateLoginPost(c *fiber.Ctx) error {
 }
 
 func (middleWare *loginMiddleWare) RedirectToHomePageOnLogin(c *fiber.Ctx) error {
-	return middleWare.loginType.RedirectLogin(c)
+	return middleWare.loginType.RedirectLogin(c, middleWare.AppCfg)
 }
 
 type LoginMiddleWare struct {
 	types.IUserService
 	types.ILoginService
-	config.IJWT
 }
 
-func (loginMiddleWare LoginMiddleWare) RedirectLogin(c *fiber.Ctx) error {
+func (loginMiddleWare LoginMiddleWare) RedirectLogin(c *fiber.Ctx, appConfig *config.AppCfg) error {
 	redirectService := service.NewAccountAdapterService(
 		service.AccountAdapterService{
 			IUserService: loginMiddleWare.IUserService,
-			IJWT:         loginMiddleWare.IJWT,
+			AppCfg:       appConfig,
 		},
 	)
 	user, err := redirectService.User(c)
@@ -80,8 +81,9 @@ func (loginMiddleWare LoginMiddleWare) Validate(c *fiber.Ctx, login *types.Login
 	return c.Next()
 }
 
-func NewLoginMiddleWare(loginType ILoginValidator) ILoginMiddleWare {
+func NewLoginMiddleWare(loginType ILoginValidator, appConfig *config.AppCfg) ILoginMiddleWare {
 	return &loginMiddleWare{
 		loginType: loginType,
+		AppCfg:    appConfig,
 	}
 }

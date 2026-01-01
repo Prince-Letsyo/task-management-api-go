@@ -1,3 +1,4 @@
+// Package pkg dsf
 package pkg
 
 import (

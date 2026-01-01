@@ -25,7 +25,7 @@ type httpController struct {
 	auth IAuthController
 }
 
-func newHttpController(cfgs ...httpConfiguration) (*httpController, error) {
+func newHTTPController(cfgs ...httpConfiguration) (*httpController, error) {
 	acs := &httpController{}
 
 	for _, cfg := range cfgs {
@@ -37,8 +37,8 @@ func newHttpController(cfgs ...httpConfiguration) (*httpController, error) {
 	return acs, nil
 }
 
-func withAuthRepository(auth Auth, authIJwt config.IJWT) httpConfiguration {
-	ahc := newAuthController(auth, authIJwt)
+func withAuthRepository(auth Auth, appConfig *config.AppCfg) httpConfiguration {
+	ahc := newAuthController(auth, appConfig)
 	return authRepository(ahc)
 }
 

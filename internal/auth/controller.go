@@ -3,7 +3,6 @@ package auth
 import (
 	"fmt"
 	"reflect"
-	"time"
 
 	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
 	"github.com/Prince-Letsyo/task-management-api-go/config"
@@ -23,13 +22,13 @@ type Auth struct {
 }
 
 type AccesstokenRes struct {
-	AccessToken     string `json:"access_token" binding:"required"`
-	AccessToken_Exp string `json:"access_token_expire"`
+	AccessToken    string `json:"access_token" binding:"required"`
+	AccessTokenExp string `json:"access_token_expire"`
 }
 
 type RefreshtokenRes struct {
-	RefreshToken     string `json:"refresh_token" binding:"required"`
-	RefreshToken_Exp string `json:"refresh_token_expire" `
+	RefreshToken    string `json:"refresh_token" binding:"required"`
+	RefreshTokenExp string `json:"refresh_token_expire" `
 }
 
 type Token struct {
@@ -43,9 +42,7 @@ type tokenRes struct {
 
 type authController struct {
 	Auth
-	config.IJWT
-	config.JwtSecrets
-	config time.Duration
+	*config.AppCfg
 }
 
 func (controller *authController) register() fiber.Handler {
@@ -54,10 +51,10 @@ func (controller *authController) register() fiber.Handler {
 
 		go service.NewAccountAdapterService(service.AccountAdapterService{
 			IUserService: controller.userService,
-			IJWT:         controller.IJWT,
+			AppCfg:       controller.AppCfg,
 		}).SendConfirmationEmail(
 			register.Email,
-			service.GenerateConfirmPath(context, app.Http.Server.Redirect),
+			service.GenerateConfirmPath(context, controller.Server.Redirect),
 		)
 
 		return context.JSON(fiber.Map{
@@ -81,13 +78,13 @@ func (controller *authController) resendConfirmEmail() fiber.Handler {
 		accountAdapter := service.NewAccountAdapterService(
 			service.AccountAdapterService{
 				IUserService: controller.userService,
-				IJWT:         controller.IJWT,
+				AppCfg:       controller.AppCfg,
 			})
 		user := context.Locals("user").(*types.User)
 
 		go accountAdapter.SendConfirmationEmail(
 			user.Email,
-			service.GenerateConfirmPath(context, app.Http.Server.Redirect),
+			service.GenerateConfirmPath(context, app.HTTP.Server.Redirect),
 		)
 		return context.Status(fiber.StatusOK).JSON(fiber.Map{
 			"success": true,
@@ -98,14 +95,14 @@ func (controller *authController) resendConfirmEmail() fiber.Handler {
 
 func (controller *authController) requestPasswordReset() fiber.Handler {
 	return func(context *fiber.Ctx) error {
-		request_password_reset := &types.RequestPasswordResetForm{}
-		if errForm := pkg.CustomBodyParser(context, request_password_reset); errForm != nil {
+		requestPasswordReset := &types.RequestPasswordResetForm{}
+		if errForm := pkg.CustomBodyParser(context, requestPasswordReset); errForm != nil {
 			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error":   errForm.Error(),
 				"message": "Error on request password reset request",
 			})
 		}
-		if validErr := pkg.VI.Vi.Struct(request_password_reset); validErr != nil {
+		if validErr := pkg.VI.Vi.Struct(requestPasswordReset); validErr != nil {
 			errorsfield := make(map[string][]string)
 			pass := reflect.TypeOf(types.RequestPasswordResetForm{})
 
@@ -114,8 +111,8 @@ func (controller *authController) requestPasswordReset() fiber.Handler {
 				if field, ok := pass.FieldByName(fieldName); !ok {
 					return context.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{})
 				} else {
-					fieldJson := field.Tag.Get("json")
-					errorsfield[fieldJson] = append(errorsfield[fieldJson], err.Tag())
+					fieldJSON := field.Tag.Get("json")
+					errorsfield[fieldJSON] = append(errorsfield[fieldJSON], err.Tag())
 				}
 			}
 			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -124,14 +121,14 @@ func (controller *authController) requestPasswordReset() fiber.Handler {
 		}
 
 		user := &types.User{}
-		_, err := controller.Auth.userService.ViewByEmail(request_password_reset.Email, user)
+		user, err := controller.userService.ViewByEmail(requestPasswordReset.Email, user)
 		if err != nil {
 			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error":   err.Error(),
 				"message": "Error on request password reset request",
 			})
 		}
-		rediect := app.Http.Server.Redirect
+		rediect := app.HTTP.Server.Redirect
 
 		if rediect == "" {
 			rediect = fmt.Sprintf("%s/reset-password", context.BaseURL())
@@ -140,7 +137,7 @@ func (controller *authController) requestPasswordReset() fiber.Handler {
 		}
 		go service.NewAccountAdapterService(service.AccountAdapterService{
 			IUserService: controller.userService,
-			IJWT:         controller.IJWT,
+			AppCfg:       controller.AppCfg,
 		}).SendPasswordResetEmail(
 			user.Email,
 			rediect,
@@ -185,7 +182,7 @@ func (controller *authController) login() fiber.Handler {
 		errToken := service.
 			NewAccountAdapterService(service.AccountAdapterService{
 				IUserService: controller.userService,
-				IJWT:         controller.IJWT,
+				AppCfg:       controller.AppCfg,
 			}).
 			Login(context, user) //nolint:wsl
 
@@ -199,14 +196,14 @@ func (controller *authController) login() fiber.Handler {
 
 		access := context.Cookies("access-token")
 		if access == "" {
-			sess, err := app.Http.Session.Get(context)
+			sess, err := app.HTTP.Session.Get(context)
 			if err != nil {
 				data["error"] = "Session error"
 				return context.Status(fiber.StatusInternalServerError).JSON(data)
 			}
 			access = sess.Get("access-token").(string)
 		}
-		accessClaims, errAC := controller.IJWT.ParseAccessToken(access)
+		accessClaims, errAC := controller.JwtSecrets.ParseAccessToken(access)
 		if errAC != nil {
 			return context.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Parsing token error"})
 		}
@@ -217,14 +214,14 @@ func (controller *authController) login() fiber.Handler {
 
 		refresh := context.Cookies("refresh-token")
 		if refresh == "" {
-			sess, err := app.Http.Session.Get(context)
+			sess, err := controller.Session.Get(context)
 			if err != nil {
 				data["error"] = "Session error"
 				return context.Status(fiber.StatusInternalServerError).JSON(data)
 			}
 			refresh = sess.Get("refresh-token").(string)
 		}
-		refreshClaims, errRC := controller.IJWT.ParseRefreshToken(refresh)
+		refreshClaims, errRC := controller.JwtSecrets.ParseRefreshToken(refresh)
 		if errRC != nil {
 			return context.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Parsing token error"})
 		}
@@ -236,12 +233,12 @@ func (controller *authController) login() fiber.Handler {
 		data["user"] = user
 		data["token"] = tokenRes{
 			Access: AccesstokenRes{
-				AccessToken:     access,
-				AccessToken_Exp: accessExpire.String(),
+				AccessToken:    access,
+				AccessTokenExp: accessExpire.String(),
 			},
 			Refresh: RefreshtokenRes{
-				RefreshToken:     refresh,
-				RefreshToken_Exp: refreshExpire.String(),
+				RefreshToken:    refresh,
+				RefreshTokenExp: refreshExpire.String(),
 			},
 		}
 		return context.Status(fiber.StatusOK).JSON(data)
@@ -255,7 +252,7 @@ func (controller *authController) logout() fiber.Handler {
 		err := service.NewAccountAdapterService(
 			service.AccountAdapterService{
 				IUserService: controller.userService,
-				IJWT:         controller.IJWT,
+				AppCfg:       controller.AppCfg,
 			}).Logout(context)
 		if err != nil {
 			data["error"] = err.Error()
@@ -275,7 +272,7 @@ func (controller *authController) createNewAccessToken() fiber.Handler {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusUnprocessableEntity).JSON(data)
 		}
-		refreshTokenClaim, err := controller.IJWT.ParseRefreshToken(refreshTokenRes.RefreshToken)
+		refreshTokenClaim, err := controller.JwtSecrets.ParseRefreshToken(refreshTokenRes.RefreshToken)
 		if err != nil {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusBadRequest).JSON(data)
@@ -290,32 +287,32 @@ func (controller *authController) createNewAccessToken() fiber.Handler {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusInternalServerError).JSON(data)
 		}
-		account_service := service.NewAccountAdapterService(service.AccountAdapterService{
+		accountService := service.NewAccountAdapterService(service.AccountAdapterService{
 			IUserService: controller.userService,
-			IJWT:         controller.IJWT,
+			AppCfg:       controller.AppCfg,
 		})
 
-		err = account_service.AccessTokenCreate(context, user)
+		err = accountService.AccessTokenCreate(context, user)
 		if err != nil {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusInternalServerError).JSON(data)
 		}
 		access := context.Cookies("access-token")
 		if access == "" {
-			sess, err := app.Http.Session.Get(context)
+			sess, err := app.HTTP.Session.Get(context)
 			if err != nil {
 				data["error"] = "Session error"
 				return context.Status(fiber.StatusInternalServerError).JSON(data)
 			}
 			access = sess.Get("access-token").(string)
 		}
-		accessTokenClaim, err := controller.IJWT.ParseAccessToken(access)
+		accessTokenClaim, err := controller.JwtSecrets.ParseAccessToken(access)
 		if err != nil {
 			return context.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Parsing token error"})
 		}
 		data["token"] = AccesstokenRes{
-			AccessToken:     access,
-			AccessToken_Exp: accessTokenClaim.ExpiresAt.String(),
+			AccessToken:    access,
+			AccessTokenExp: accessTokenClaim.ExpiresAt.String(),
 		}
 		return context.Status(fiber.StatusOK).JSON(data)
 	}
@@ -330,15 +327,15 @@ func (controller *authController) verifyToken() fiber.Handler {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusBadRequest).JSON(data)
 		}
-		accessToken, err := controller.IJWT.ParseAccessToken(token.Token)
+		accessToken, err := controller.JwtSecrets.ParseAccessToken(token.Token)
 		if err != nil {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusBadRequest).JSON(data)
 		}
 
 		data["token"] = AccesstokenRes{
-			AccessToken:     token.Token,
-			AccessToken_Exp: accessToken.ExpiresAt.String(),
+			AccessToken:    token.Token,
+			AccessTokenExp: accessToken.ExpiresAt.String(),
 		}
 
 		return context.Status(fiber.StatusOK).JSON(data)
@@ -347,34 +344,28 @@ func (controller *authController) verifyToken() fiber.Handler {
 
 func newAuthController(
 	authC Auth,
-	authJWT config.IJWT,
+	appConfig *config.AppCfg,
 ) IAuthController {
 	controller := &authController{
-		Auth:       authC,
-		IJWT:       authJWT,
-		JwtSecrets: app.Http.JwtSecrets,
-		config:     app.Http.HTTP.Timeout,
+		Auth:   authC,
+		AppCfg: appConfig,
 	}
-
 	registerMiddleWare := middleware.NewRegisterMiddleWare(
 		middleware.RegisterMiddleWare{
 			IUserService:     controller.userService,
 			IRegisterService: controller.registerService,
-			IJWT:             controller.IJWT,
-		},
-	)
+		}, appConfig)
 
 	loginMiddleWare := middleware.NewLoginMiddleWare(
 		middleware.LoginMiddleWare{
 			IUserService:  controller.userService,
 			ILoginService: controller.loginService,
-			IJWT:          controller.IJWT,
-		})
+		}, appConfig)
 	passwordMiddleWare := middleware.NewPasswordResetMiddleWare(
 		middleware.PasswordResetMiddleWare{
 			IUserService:     controller.userService,
 			IRegisterService: controller.registerService,
-		})
+		}, appConfig)
 	controller.router.Post(
 		"register",
 		loginMiddleWare.RedirectToHomePageOnLogin,

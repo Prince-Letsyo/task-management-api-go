@@ -1,8 +1,7 @@
 package auth
 
 import (
-	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
-	"github.com/Prince-Letsyo/task-management-api-go/internal/user"
+	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/pkg/errors"
 )
@@ -25,13 +24,8 @@ func newRegisterService(cfgs ...RegisterServiceConfiguration) (*RegisterService,
 	return rs, nil
 }
 
-func withDatabaseRegisterRepository() RegisterServiceConfiguration {
-	userService, err := user.NewUserService(user.WithDatabaseUserRepository())
-	if err != nil {
-		panic(err.Error())
-	}
-	rs := NewDBRegisterRepository(userService)
-	return withRegisterRepository(rs)
+func withDatabaseRegisterRepository(userService types.IUserService, appConfig *config.AppCfg) RegisterServiceConfiguration {
+	return withRegisterRepository(NewDBRegisterRepository(userService, appConfig))
 }
 
 func withRegisterRepository(registerServiceRepository IRegisterRepository) RegisterServiceConfiguration {
@@ -61,6 +55,7 @@ type LoginServiceConfiguration func(ls *LoginService) error
 
 type LoginService struct {
 	types.IUserService
+	*config.AppCfg
 }
 
 // NewLoginService returns new LoginService.
@@ -75,11 +70,7 @@ func newLoginService(cfgs ...LoginServiceConfiguration) (*LoginService, error) {
 	return ls, nil
 }
 
-func withDatabaseLoginRepository() LoginServiceConfiguration {
-	userService, err := user.NewUserService(user.WithDatabaseUserRepository())
-	if err != nil {
-		panic(err.Error())
-	}
+func withDatabaseLoginRepository(userService types.IUserService) LoginServiceConfiguration {
 	return withLoginRepository(userService)
 }
 
@@ -92,14 +83,14 @@ func withLoginRepository(userService types.IUserService) LoginServiceConfigurati
 
 func (loginService *LoginService) CheckLogin(login *types.Login) (*types.User, error) {
 	user := &types.User{}
-	_, errUser := loginService.ViewByEmail(login.Email, user)
+	user, errUser := loginService.ViewByEmail(login.Email, user)
 
 	if errUser != nil {
 		return nil, errUser
 	} else if !user.EmailVerified {
 		return user, errors.New(`Your account is not verified check your mail for verification link`)
 	}
-	match, _ := app.Http.Hash.Match(login.Password, user.Password)
+	match, _ := loginService.AppCfg.Hash.Match(login.Password, user.Password)
 	if !match {
 		return nil, errors.New("invalid Username or Password")
 	}

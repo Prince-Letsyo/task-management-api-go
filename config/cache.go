@@ -31,10 +31,10 @@ func (c *CacheConfig) Setup() {
 }
 
 func (c *CacheConfig) GetFromCache(tag string, item interface{}) error {
-	if raw_data, err := c.Get(tag); err != nil {
+	if rawData, err := c.Get(tag); err != nil {
 		return err
 	} else {
-		if err := json.Unmarshal(raw_data, &item); err != nil {
+		if err := json.Unmarshal(rawData, &item); err != nil {
 			return err
 		}
 	}

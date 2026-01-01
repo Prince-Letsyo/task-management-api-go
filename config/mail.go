@@ -48,7 +48,7 @@ func (m *Mail) Send(to string, subject string, body string, cc string, from stri
 	return nil
 }
 
-func (m *Mail) PrepareHtml(view string, body fiber.Map) string {
+func (m *Mail) PrepareHTML(view string, body fiber.Map) string {
 	buf := bytebufferpool.Get()
 	defer bytebufferpool.Put(buf)
 	// app.Settings.Views.Render
@@ -76,11 +76,11 @@ func (m *Mail) SetupMailer() {
 	m.SMTPServer.KeepAlive = false
 
 	// Timeout for connect to SMTP Server
-	m.SMTPServer.ConnectTimeout = 10 * time.Second
+	m.ConnectTimeout = 10 * time.Second
 
 	// Timeout for send the data and wait respond
 	m.SMTPServer.SendTimeout = 10 * time.Second
-	m.SMTPClient, err = m.SMTPServer.Connect()
+	m.SMTPClient, err = m.Connect()
 	if err != nil {
 		log.Print(err)
 	}

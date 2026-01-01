@@ -1,14 +1,15 @@
+// Package model jhd
 package model
 
 import (
 	"log"
 
-	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
+	"github.com/Prince-Letsyo/task-management-api-go/config"
 )
 
-func Migrate() {
+func Migrate(appConfig *config.AppCfg) {
 	log.Println("Initiating migration...")
-	err := app.Http.Database.DB.Migrator().AutoMigrate()
+	err := appConfig.Database.DB.Migrator().AutoMigrate()
 	if err != nil {
 		panic(err)
 	}

@@ -1,6 +1,7 @@
 package user
 
 import (
+	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/pkg/errors"
 )
@@ -10,7 +11,7 @@ type UserService struct {
 }
 
 func (us *UserService) ViewByID(id uint, user *types.User) (*types.User, error) {
-	u, errUser := us.retrieveById(id, user)
+	u, errUser := us.retrieveByID(id, user)
 	if errUser != nil {
 		return nil, errUser
 	}
@@ -63,8 +64,8 @@ func NewUserService(cfgs ...UserServiceConfiguration) (*UserService, error) {
 	return us, nil
 }
 
-func WithDatabaseUserRepository() UserServiceConfiguration {
-	userRepository := NewDBUser()
+func WithDatabaseUserRepository(appConfig *config.AppCfg) UserServiceConfiguration {
+	userRepository := NewDBUser(appConfig)
 	return withUserRepository(userRepository)
 }
 

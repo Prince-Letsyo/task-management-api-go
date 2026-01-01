@@ -1,9 +1,9 @@
+// Package auth hdsfhhj
 package auth
 
 import (
 	"errors"
 
-	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/model"
@@ -17,23 +17,23 @@ type IRegisterRepository interface {
 }
 
 type DBRegisterRepository struct {
-	dbConfig    config.DatabaseConfig
+	*config.AppCfg
 	userService types.IUserService
 }
 
-func NewDBRegisterRepository(userService types.IUserService) *DBRegisterRepository {
-	dbConfig := app.Http.Database
+// NewDBRegisterRepository fdg
+func NewDBRegisterRepository(userService types.IUserService, appConfig *config.AppCfg) *DBRegisterRepository {
 	return &DBRegisterRepository{
-		dbConfig:    dbConfig,
+		AppCfg:      appConfig,
 		userService: userService,
 	}
 }
 
-func hashPswd(register *types.RegisterForm) (err error) {
+func hashPswd(register *types.RegisterForm, hash config.Hash) (err error) {
 	if register.CPassword != register.Password {
 		return errors.New("passwords do not match")
 	}
-	hashPas, err := app.Http.Hash.Create(register.Password)
+	hashPas, err := hash.Create(register.Password)
 	if err != nil {
 		return err
 	}
@@ -56,11 +56,11 @@ func (dbRegisterRepository *DBRegisterRepository) store(register *types.Register
 	if u != nil {
 		return nil, errors.New("user already exists")
 	}
-	if errHash := hashPswd(register); errHash != nil {
+	if errHash := hashPswd(register, dbRegisterRepository.Hash); errHash != nil {
 		return nil, errHash
 	}
 	registerModel.Password = register.Password
-	connDB := dbRegisterRepository.dbConfig.Begin()
+	connDB := dbRegisterRepository.AppCfg.Database.Begin()
 	defer connDB.Commit()
 	if err := connDB.Create(registerModel); err.Error != nil {
 		connDB.Rollback()
@@ -78,13 +78,13 @@ func (dbRegisterRepository *DBRegisterRepository) store(register *types.Register
 }
 
 func (dbRegisterRepository *DBRegisterRepository) updatePassword(id uint, passwordReset *types.PasswordResetForm) (*types.RegisterForm, error) {
-	connDB := dbRegisterRepository.dbConfig.Begin()
+	connDB := dbRegisterRepository.AppCfg.Database.Begin()
 	defer connDB.Commit()
 	register := &types.RegisterForm{
 		Password:  passwordReset.Password,
 		CPassword: passwordReset.CPassword,
 	}
-	if errHash := hashPswd(register); errHash != nil {
+	if errHash := hashPswd(register, dbRegisterRepository.Hash); errHash != nil {
 		return nil, errHash
 	}
 	if err := connDB.Model(&model.RegisterForm{}).Where("id = ? ", id).Updates(register); err.Error != nil {

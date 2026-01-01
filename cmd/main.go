@@ -16,13 +16,13 @@ func main() {
 	pflag.Parse()
 	app.Load(*filepath)
 
-	app.Http.Server.Version = app.Version
+	app.HTTP.Server.Version = app.Version
 	if *migrate {
-		model.Migrate()
+		model.Migrate(app.HTTP)
 	} else {
 		// app.LoadAdditionalServices() // Enable for PayPal and any other services
-		core.LoadRoutes(app.Http.Server.App)
-		app.Http.Route404()
-		log.Fatal(app.Http.Server.ServeWithGraceFullShutdown(app.Http))
+		core.LoadRoutes(app.HTTP.Server.App)
+		app.HTTP.Route404()
+		log.Fatal(app.HTTP.Server.ServeWithGraceFullShutdown(app.HTTP))
 	}
 }

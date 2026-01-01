@@ -17,16 +17,6 @@ type (
 		Valid() error
 		jwt.Claims
 	}
-	IJWT interface {
-		NewAccessToken(claims jwt.Claims) (string, error)
-		NewRefreshToken(claims jwt.Claims) (string, error)
-		ParseAccessToken(accessToken string) (*UserClaims, error)
-		ParseRefreshToken(refreshToken string) (*UserClaims, error)
-		GetAPIAccessExpireDuration() time.Duration
-		GetAPIRefreshExpireDuration() time.Duration
-		GetAPIConfig() *JwtConfig
-		GetAPPConfig() *JwtConfig
-	}
 )
 
 type JwtConfig struct {
@@ -109,15 +99,11 @@ func (tokenJWT *JwtSecrets) GetAPIRefreshExpireDuration() time.Duration {
 	return time.Duration(tokenJWT.RefreshExpire) * time.Hour
 }
 
-func NewJWT() IJWT {
-	return &JwtSecrets{}
-}
-
 type UserClaims struct {
 	ID    string `json:"id"`
 	First string `json:"first"`
 	Last  string `json:"last"`
-	Email string `json:email`
+	Email string `json:"email"`
 	jwt.RegisteredClaims
 }
 
@@ -125,7 +111,7 @@ func (c UserClaims) Valid() error {
 	vErr := new(pkg.ValidationError)
 	now := time.Now().Unix()
 
-	// The claims below are optional, by default, so if they are set to the
+	// The  below are optional, by default, so if they are set to the
 	// default value in Go, let's not fail the verification for them.
 	if c.VerifyExpiresAt(now, false) {
 		delta := time.Unix(now, 0).Sub(time.Unix(c.ExpiresAt.Unix(), 0))
@@ -168,8 +154,8 @@ func (c UserClaims) VerifyIssuedAt(cmp int64, req bool) bool {
 	return verifyIat(c.IssuedAt.Unix(), cmp, req)
 }
 
-// Compares the iss claim against cmp.
-// If required is false, this method will return true if the value matches or is unset
+// claim against cmp.
+// If rfalse, this method will return true if the value matches or is unset
 func (c UserClaims) VerifyIssuer(cmp string, req bool) bool {
 	return verifyIss(c.Issuer, cmp, req)
 }

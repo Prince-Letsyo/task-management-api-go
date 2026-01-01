@@ -1,7 +1,7 @@
+// Package user hjjk
 package user
 
 import (
-	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/model"
@@ -11,7 +11,7 @@ import (
 )
 
 type IUserRepository interface {
-	retrieveById(id uint, user *types.User) (*types.User, error)
+	retrieveByID(id uint, user *types.User) (*types.User, error)
 	retrieveByEmail(email string, user *types.User) (*types.User, error)
 	retrieveVerifiedUserByEmail(email string, user *types.User) (*types.User, error)
 	retrievePage(filters *types.UserFilters) (*types.UserPage, error)
@@ -19,11 +19,11 @@ type IUserRepository interface {
 }
 
 type DBUserRepository struct {
-	dbConfig config.DatabaseConfig
+	*config.AppCfg
 }
 
-func (dbUserRepository *DBUserRepository) retrieveById(id uint, user *types.User) (*types.User, error) {
-	connDB := dbUserRepository.dbConfig.Begin()
+func (dbUserRepository *DBUserRepository) retrieveByID(id uint, user *types.User) (*types.User, error) {
+	connDB := dbUserRepository.Database.Begin()
 	if err := connDB.Model(&model.User{}).
 		Where("id = ? ", id).First(user); err.Error != nil {
 		defer connDB.Rollback()
@@ -37,7 +37,7 @@ func (dbUserRepository *DBUserRepository) retrieveById(id uint, user *types.User
 }
 
 func (dbUserRepository *DBUserRepository) retrieveByEmail(email string, user *types.User) (*types.User, error) {
-	connDB := dbUserRepository.dbConfig.Begin()
+	connDB := dbUserRepository.Database.Begin()
 	if err := connDB.Where(&model.User{Email: email}).
 		First(&user); err.Error != nil {
 		defer connDB.Rollback()
@@ -51,7 +51,7 @@ func (dbUserRepository *DBUserRepository) retrieveByEmail(email string, user *ty
 }
 
 func (dbUserRepository *DBUserRepository) retrieveVerifiedUserByEmail(email string, user *types.User) (*types.User, error) {
-	connDB := dbUserRepository.dbConfig.Begin()
+	connDB := dbUserRepository.Database.Begin()
 	if err := connDB.
 		Where(&model.User{Email: email, EmailVerified: true}).
 		First(&user); err.Error != nil {
@@ -66,9 +66,9 @@ func (dbUserRepository *DBUserRepository) retrieveVerifiedUserByEmail(email stri
 
 func (dbUserRepository *DBUserRepository) retrievePage(filters *types.UserFilters) (*types.UserPage, error) {
 	users := []types.User{}
-	err := dbUserRepository.dbConfig.Begin().
+	err := dbUserRepository.Database.Begin().
 		Model(&model.User{}).
-		Scopes(dbUserRepository.dbConfig.Paginate(&filters.Filters)).
+		Scopes(dbUserRepository.Database.Paginate(&filters.Filters)).
 		Find(&users)
 	if err.Error != nil {
 		return nil, err.Error
@@ -87,7 +87,7 @@ func (dbUserRepository *DBUserRepository) retrievePage(filters *types.UserFilter
 }
 
 func (dbUserRepository *DBUserRepository) update(id uint, user *types.User) (*types.User, error) {
-	connDB := dbUserRepository.dbConfig.Begin()
+	connDB := dbUserRepository.Database.Begin()
 	defer connDB.Commit()
 	if err := connDB.Model(&model.User{}).
 		Where("id = ? ", id).
@@ -102,9 +102,8 @@ func (dbUserRepository *DBUserRepository) update(id uint, user *types.User) (*ty
 	return user, nil
 }
 
-func NewDBUser() *DBUserRepository {
-	dbConfig := app.Http.Database
+func NewDBUser(appConfig *config.AppCfg) *DBUserRepository {
 	return &DBUserRepository{
-		dbConfig: dbConfig,
+		AppCfg: appConfig,
 	}
 }

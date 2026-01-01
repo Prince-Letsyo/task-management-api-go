@@ -1,3 +1,4 @@
+// Package core dfs
 package core
 
 import (
@@ -8,12 +9,12 @@ import (
 )
 
 func LoadRoutes(app *fiber.App) {
-	mainRouter := app.Group(appCfg.Http.Server.FullAPIPath())
+	mainRouter := app.Group(appCfg.HTTP.Server.FullAPIPath())
 	auth.LoadAuthRoutes(mainRouter)
 	app.Get("*", func(c *fiber.Ctx) error {
-		return appCfg.Http.Server.ErrorHandler(c, fiber.NewError(fiber.StatusNotFound, "Page not found"))
+		return appCfg.HTTP.Server.ErrorHandler(c, fiber.NewError(fiber.StatusNotFound, "Page not found"))
 	})
 }
 
-func setupSwagger(f *fiber.App) {
-}
+//func setupSwagger(f *fiber.App) {
+//}

@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/service"
@@ -16,19 +15,20 @@ type (
 	}
 
 	IRegisterValidatorToken interface {
-		ValidateToken(c *fiber.Ctx, email string, user *types.User) error
+		ValidateToken(c *fiber.Ctx, email string, user *types.User, appConfig *config.AppCfg) error
 		Validate(c *fiber.Ctx, register *types.RegisterForm) error
 	}
 )
 
 type registerMiddleWare struct {
 	registerType IRegisterValidatorToken
+	*config.AppCfg
 }
 
 func (middleWare *registerMiddleWare) ValidateConfirmToken(c *fiber.Ctx) error {
 	user := &types.User{}
-	t := pkg.Decrypt(c.Query("t"), app.Http.Server.Key)
-	return middleWare.registerType.ValidateToken(c, t, user)
+	t := pkg.Decrypt(c.Query("t"), middleWare.AppCfg.Server.Key)
+	return middleWare.registerType.ValidateToken(c, t, user, middleWare.AppCfg)
 }
 
 func (middleWare *registerMiddleWare) ValidateRegister(c *fiber.Ctx) error {
@@ -39,7 +39,6 @@ func (middleWare *registerMiddleWare) ValidateRegister(c *fiber.Ctx) error {
 type RegisterMiddleWare struct {
 	types.IUserService
 	types.IRegisterService
-	config.IJWT
 }
 
 func (registerMiddleWare RegisterMiddleWare) Validate(context *fiber.Ctx, register *types.RegisterForm) error {
@@ -62,7 +61,7 @@ func (registerMiddleWare RegisterMiddleWare) Validate(context *fiber.Ctx, regist
 	return context.Next()
 }
 
-func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t string, user *types.User) error {
+func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t string, user *types.User, appConfig *config.AppCfg) error {
 	_, err := registerMiddleWare.ViewByEmail(t, user)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -91,7 +90,7 @@ func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t strin
 		NewAccountAdapterService(
 			service.AccountAdapterService{
 				IUserService: registerMiddleWare.IUserService,
-				IJWT:         registerMiddleWare.IJWT,
+				AppCfg:       appConfig,
 			},
 		).
 		Login(c, vUser)
@@ -105,8 +104,9 @@ func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t strin
 	return c.Next()
 }
 
-func NewRegisterMiddleWare(registerType IRegisterValidatorToken) IRegisterMiddleWare {
+func NewRegisterMiddleWare(registerType IRegisterValidatorToken, appConfig *config.AppCfg) IRegisterMiddleWare {
 	return &registerMiddleWare{
 		registerType: registerType,
+		AppCfg:       appConfig,
 	}
 }

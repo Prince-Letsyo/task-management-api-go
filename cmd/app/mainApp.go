@@ -1,3 +1,4 @@
+// Package app dd
 package app
 
 import (
@@ -13,14 +14,14 @@ import (
 )
 
 var (
-	Http    *config.AppCfg
+	HTTP    *config.AppCfg
 	Version = "develop"
 )
 
 func Load(filepath string) {
-	Http = &config.AppCfg{ConfigFile: filepath}
-	Http.SetUp()
-	LoadBuiltInMiddlewares(Http)
+	HTTP = &config.AppCfg{ConfigFile: filepath}
+	HTTP.SetUp()
+	LoadBuiltInMiddlewares(HTTP)
 }
 
 func LoadBuiltInMiddlewares(app *config.AppCfg) {
