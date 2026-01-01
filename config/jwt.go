@@ -8,7 +8,6 @@ import (
 
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
-	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 )
@@ -25,7 +24,6 @@ type (
 		ParseRefreshToken(refreshToken string) (*UserClaims, error)
 		GetAPIAccessExpireDuration() time.Duration
 		GetAPIRefreshExpireDuration() time.Duration
-		DeleteToken(c *fiber.Ctx, token string) error
 		GetAPIConfig() *JwtConfig
 		GetAPPConfig() *JwtConfig
 	}
@@ -75,7 +73,7 @@ func (tokenJWT *JwtSecrets) ParseAccessToken(accessToken string) (*UserClaims, e
 	if claims, ok := parsedAccessToken.Claims.(*UserClaims); ok {
 		return claims, nil
 	}
-	return nil, errors.New("Invalid access token providered.")
+	return nil, errors.New("Invalid token providered.")
 }
 
 func (tokenJWT *JwtSecrets) ParseRefreshToken(refreshToken string) (*UserClaims, error) {
@@ -92,15 +90,7 @@ func (tokenJWT *JwtSecrets) ParseRefreshToken(refreshToken string) (*UserClaims,
 	if claims, ok := parsedRefreshToken.Claims.(*UserClaims); ok {
 		return claims, nil
 	}
-	return nil, errors.New("Invalid refresh token providered.")
-}
-
-func (tokenJWT *JwtSecrets) DeleteToken(c *fiber.Ctx, token string) error {
-	if _, err := tokenJWT.ParseRefreshToken(token); err != nil {
-		return err
-	}
-	c.ClearCookie(token)
-	return nil
+	return nil, errors.New("Invalid token providered.")
 }
 
 func (tokenJWT *JwtSecrets) GetAPPConfig() *JwtConfig {
@@ -124,7 +114,7 @@ func NewJWT() IJWT {
 }
 
 type UserClaims struct {
-	Id    string `json:"id"`
+	ID    string `json:"id"`
 	First string `json:"first"`
 	Last  string `json:"last"`
 	Email string `json:email`
@@ -240,7 +230,7 @@ func verifyNbf(nbf int64, now int64, required bool) bool {
 // NewUserClaims returns new UserClaims.
 func NewUserClaims(user types.User, expire time.Duration) IUserClaims {
 	return &UserClaims{
-		Id:    strconv.Itoa(int(user.ID)),
+		ID:    strconv.Itoa(int(user.ID)),
 		First: user.FirstName,
 		Last:  user.LastName,
 		Email: user.Email,

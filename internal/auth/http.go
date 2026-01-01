@@ -14,7 +14,6 @@ type IAuthController interface {
 	passwordResetComfirm() fiber.Handler
 	passwordResetComplete() fiber.Handler
 	passwordReset() fiber.Handler
-	oAuthToken() fiber.Handler
 	requestPasswordReset() fiber.Handler
 	createNewAccessToken() fiber.Handler
 	verifyToken() fiber.Handler

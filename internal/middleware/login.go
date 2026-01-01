@@ -46,8 +46,14 @@ func (loginMiddleWare LoginMiddleWare) RedirectLogin(c *fiber.Ctx) error {
 			IJWT:         loginMiddleWare.IJWT,
 		},
 	)
-	user, _ := redirectService.User(c)
-
+	user, err := redirectService.User(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(
+			fiber.Map{
+				"error":   "Unauthorized",
+				"message": err.Error(),
+			})
+	}
 	c.Locals("user", user)
 
 	return c.Next()

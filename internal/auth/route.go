@@ -24,7 +24,7 @@ func LoadAuthRoutes(router fiber.Router) {
 	if _, err := newHttpController(
 		withAuthRepository(
 			Auth{
-				router:          router.Group("/auth"),
+				router:          router.Group("/auth/"),
 				userService:     userService,
 				registerService: registerService,
 				loginService:    loginService,

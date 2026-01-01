@@ -38,7 +38,7 @@ type (
 		Logout(c *fiber.Ctx) error
 		AccessTokenCreate(c *fiber.Ctx, user *types.User) error
 		RefreshTokenCreate(c *fiber.Ctx, user *types.User) error
-		getAAccountSession(duration time.Duration, c *fiber.Ctx) (*session.Session, error)
+		getAccountSession(duration time.Duration, c *fiber.Ctx) (*session.Session, error)
 	}
 )
 
@@ -87,7 +87,7 @@ func (adapter *accountAdapterService) User(c *fiber.Ctx) (*types.User, error) {
 }
 
 func (adapter *accountAdapterService) getAccountSession(duration time.Duration, c *fiber.Ctx) (*session.Session, error) {
-	return adapter.adapterType.getAAccountSession(duration, c)
+	return adapter.adapterType.getAccountSession(duration, c)
 }
 
 func NewAccountAdapterService(adapterType IAdapterService) IAccountAdapterService {
@@ -143,11 +143,18 @@ func (adapter AccountAdapterService) SendConfirmationEmail(email string, baseURL
 
 func (adapter AccountAdapterService) UserClaims(c *fiber.Ctx) (*config.UserClaims, error) {
 	accessToken := c.Cookies("access-token")
+	accessClaim := &config.UserClaims{}
+	if accessToken == "" {
+		sess, err := app.Http.Session.Get(c)
+		if err != nil {
+			return accessClaim, err
+		}
+		accessToken = sess.Get("access-token").(string)
+	}
 	accessClaim, err := adapter.ParseAccessToken(accessToken)
 	if err != nil {
-		return &config.UserClaims{}, err
+		return accessClaim, err
 	}
-
 	return accessClaim, nil
 }
 
@@ -177,7 +184,35 @@ func (adapter AccountAdapterService) UserID(c *fiber.Ctx) (uint, error) {
 }
 
 func (adapter AccountAdapterService) IsLoggedIn(context *fiber.Ctx) bool {
-	token := context.Cookies("access-token")
+	token := context.Cookies("refresh-token")
+	if token == "" {
+		if sess, err := app.Http.Session.Get(context); err != nil {
+			return false
+		} else {
+			token = sess.Get("refresh-token").(string)
+			if token != "" {
+				parsedTokenClaim, err := adapter.ParseRefreshToken(token)
+				if err != nil {
+					return false
+				}
+				if err = parsedTokenClaim.Valid(); err != nil {
+					return false
+				}
+				token = parsedTokenClaim.ID
+			} else {
+				return false
+			}
+		}
+	} else {
+		parsedTokenClaim, err := adapter.ParseRefreshToken(token)
+		if err != nil {
+			return false
+		}
+		if err = parsedTokenClaim.Valid(); err != nil {
+			return false
+		}
+		token = parsedTokenClaim.ID
+	}
 	return token != ""
 }
 
@@ -273,6 +308,13 @@ func (adapter AccountAdapterService) Login(context *fiber.Ctx, user *types.User)
 }
 
 func (adapter AccountAdapterService) Logout(context *fiber.Ctx) error {
+	if sess, err := app.Http.Session.Get(context); err != nil {
+		return err
+	} else {
+		if err = sess.Destroy(); err != nil {
+			return err
+		}
+	}
 	context.ClearCookie()
 	context.Set("X-DNS-Prefetch-Control", "off")
 	context.Set("Pragma", "no-cache")
