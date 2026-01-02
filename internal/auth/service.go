@@ -10,11 +10,14 @@ type RegisterServiceConfiguration func(rs *RegisterService) error
 
 type RegisterService struct {
 	IRegisterRepository
+	*config.AppCfg
 }
 
 // NewRegisterService returns new RegisterService.
-func newRegisterService(cfgs ...RegisterServiceConfiguration) (*RegisterService, error) {
-	rs := &RegisterService{}
+func newRegisterService(appConfig *config.AppCfg, cfgs ...RegisterServiceConfiguration) (*RegisterService, error) {
+	rs := &RegisterService{
+		AppCfg: appConfig,
+	}
 
 	for _, cfg := range cfgs {
 		if err := cfg(rs); err != nil {
@@ -24,21 +27,17 @@ func newRegisterService(cfgs ...RegisterServiceConfiguration) (*RegisterService,
 	return rs, nil
 }
 
-func withDatabaseRegisterRepository(userService types.IUserService, appConfig *config.AppCfg) RegisterServiceConfiguration {
-	return withRegisterRepository(NewDBRegisterRepository(userService, appConfig))
-}
-
-func withRegisterRepository(registerServiceRepository IRegisterRepository) RegisterServiceConfiguration {
-	return func(registerService *RegisterService) error {
-		registerService.IRegisterRepository = registerServiceRepository
+func withDatabaseRegisterRepository(userService types.IUserService) RegisterServiceConfiguration {
+	return func(rs *RegisterService) error {
+		rs.IRegisterRepository = NewDBRegisterRepository(userService, rs.AppCfg)
 		return nil
 	}
 }
 
 func (registerService *RegisterService) NewRegisterService(register *types.RegisterForm) (*types.RegisterForm, error) {
-	r, errbook := registerService.store(register)
-	if errbook != nil {
-		return nil, errbook
+	r, errBook := registerService.store(register)
+	if errBook != nil {
+		return nil, errBook
 	}
 	return r, nil
 }
@@ -59,8 +58,10 @@ type LoginService struct {
 }
 
 // NewLoginService returns new LoginService.
-func newLoginService(cfgs ...LoginServiceConfiguration) (*LoginService, error) {
-	ls := &LoginService{}
+func newLoginService(appConfig *config.AppCfg, cfgs ...LoginServiceConfiguration) (*LoginService, error) {
+	ls := &LoginService{
+		AppCfg: appConfig,
+	}
 
 	for _, cfg := range cfgs {
 		if err := cfg(ls); err != nil {
@@ -71,12 +72,8 @@ func newLoginService(cfgs ...LoginServiceConfiguration) (*LoginService, error) {
 }
 
 func withDatabaseLoginRepository(userService types.IUserService) LoginServiceConfiguration {
-	return withLoginRepository(userService)
-}
-
-func withLoginRepository(userService types.IUserService) LoginServiceConfiguration {
-	return func(loginService *LoginService) error {
-		loginService.IUserService = userService
+	return func(ls *LoginService) error {
+		ls.IUserService = userService
 		return nil
 	}
 }
@@ -90,7 +87,7 @@ func (loginService *LoginService) CheckLogin(login *types.Login) (*types.User, e
 	} else if !user.EmailVerified {
 		return user, errors.New(`Your account is not verified check your mail for verification link`)
 	}
-	match, _ := loginService.AppCfg.Hash.Match(login.Password, user.Password)
+	match, _ := loginService.Hash.Match(login.Password, user.Password)
 	if !match {
 		return nil, errors.New("invalid Username or Password")
 	}

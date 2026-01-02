@@ -8,6 +8,7 @@ import (
 
 type UserService struct {
 	IUserRepository
+	*config.AppCfg
 }
 
 func (us *UserService) ViewByID(id uint, user *types.User) (*types.User, error) {
@@ -53,8 +54,10 @@ func (us *UserService) Modify(id uint, user *types.User) (*types.User, error) {
 type UserServiceConfiguration func(us *UserService) error
 
 // NewUserService returns new UserService.
-func NewUserService(cfgs ...UserServiceConfiguration) (*UserService, error) {
-	us := &UserService{}
+func NewUserService(appConfig *config.AppCfg, cfgs ...UserServiceConfiguration) (*UserService, error) {
+	us := &UserService{
+		AppCfg: appConfig,
+	}
 
 	for _, cfg := range cfgs {
 		if err := cfg(us); err != nil {
@@ -64,14 +67,9 @@ func NewUserService(cfgs ...UserServiceConfiguration) (*UserService, error) {
 	return us, nil
 }
 
-func WithDatabaseUserRepository(appConfig *config.AppCfg) UserServiceConfiguration {
-	userRepository := NewDBUser(appConfig)
-	return withUserRepository(userRepository)
-}
-
-func withUserRepository(userRepository IUserRepository) UserServiceConfiguration {
-	return func(userService *UserService) error {
-		userService.IUserRepository = userRepository
+func WithDatabaseUserRepository() UserServiceConfiguration {
+	return func(us *UserService) error {
+		us.IUserRepository = NewDBUser(us.AppCfg)
 		return nil
 	}
 }

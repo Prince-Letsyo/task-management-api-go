@@ -1,36 +1,40 @@
 package auth
 
 import (
-	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
+	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/user"
 	"github.com/gofiber/fiber/v2"
 )
 
-func LoadAuthRoutes(router fiber.Router) {
-	userService, err := user.NewUserService(user.WithDatabaseUserRepository(app.HTTP))
+func LoadAuthRoutes(router fiber.Router, appConfig *config.AppCfg) {
+	userService, err := user.NewUserService(
+		appConfig,
+		user.WithDatabaseUserRepository())
 	if err != nil {
 		panic(err.Error())
 	}
 	registerService, err := newRegisterService(
-		withDatabaseRegisterRepository(userService, app.HTTP))
+		appConfig,
+		withDatabaseRegisterRepository(userService))
 	if err != nil {
 		panic(err.Error())
 	}
 
 	loginService, err := newLoginService(
+		appConfig,
 		withDatabaseLoginRepository(userService))
 	if err != nil {
 		panic(err.Error())
 	}
 
 	if _, err := newHTTPController(
-		withAuthRepository(
+		withAuthController(
 			Auth{
 				router:          router.Group("/auth/"),
 				userService:     userService,
 				registerService: registerService,
 				loginService:    loginService,
-			}, app.HTTP)); err != nil {
+			}, appConfig)); err != nil {
 		panic(err.Error())
 	}
 }

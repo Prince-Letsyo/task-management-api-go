@@ -60,7 +60,7 @@ func (dbRegisterRepository *DBRegisterRepository) store(register *types.Register
 		return nil, errHash
 	}
 	registerModel.Password = register.Password
-	connDB := dbRegisterRepository.AppCfg.Database.Begin()
+	connDB := dbRegisterRepository.Database.Begin()
 	defer connDB.Commit()
 	if err := connDB.Create(registerModel); err.Error != nil {
 		connDB.Rollback()
@@ -78,7 +78,7 @@ func (dbRegisterRepository *DBRegisterRepository) store(register *types.Register
 }
 
 func (dbRegisterRepository *DBRegisterRepository) updatePassword(id uint, passwordReset *types.PasswordResetForm) (*types.RegisterForm, error) {
-	connDB := dbRegisterRepository.AppCfg.Database.Begin()
+	connDB := dbRegisterRepository.Database.Begin()
 	defer connDB.Commit()
 	register := &types.RegisterForm{
 		Password:  passwordReset.Password,

@@ -21,7 +21,7 @@ func main() {
 		model.Migrate(app.HTTP)
 	} else {
 		// app.LoadAdditionalServices() // Enable for PayPal and any other services
-		core.LoadRoutes(app.HTTP.Server.App)
+		core.LoadRoutes(app.HTTP)
 		app.HTTP.Route404()
 		log.Fatal(app.HTTP.Server.ServeWithGraceFullShutdown(app.HTTP))
 	}

@@ -2,17 +2,18 @@
 package core
 
 import (
-	appCfg "github.com/Prince-Letsyo/task-management-api-go/cmd/app"
+	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/auth"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-func LoadRoutes(app *fiber.App) {
-	mainRouter := app.Group(appCfg.HTTP.Server.FullAPIPath())
-	auth.LoadAuthRoutes(mainRouter)
+func LoadRoutes(appCfg *config.AppCfg) {
+	app := appCfg.Server.App
+	mainRouter := app.Group(appCfg.Server.FullAPIPath())
+	auth.LoadAuthRoutes(mainRouter, appCfg)
 	app.Get("*", func(c *fiber.Ctx) error {
-		return appCfg.HTTP.Server.ErrorHandler(c, fiber.NewError(fiber.StatusNotFound, "Page not found"))
+		return appCfg.Server.ErrorHandler(c, fiber.NewError(fiber.StatusNotFound, "Page not found"))
 	})
 }
 
