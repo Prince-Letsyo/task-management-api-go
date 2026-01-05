@@ -19,9 +19,9 @@ type (
 		ValidatePasswordResetData(c *fiber.Ctx) error
 	}
 	IPasswordResetValidator interface {
-		CheckPasswordResetEmailToken(c *fiber.Ctx, appConfig *config.AppCfg) error
-		CheckPasswordResetToken(c *fiber.Ctx, appConfig *config.AppCfg) error
-		CheckPasswordResetData(c *fiber.Ctx, appConfig *config.AppCfg, passwordReset *types.PasswordResetForm) error
+		CheckPasswordResetEmailToken(c *fiber.Ctx, appCfg *config.AppCfg) error
+		CheckPasswordResetToken(c *fiber.Ctx, appCfg *config.AppCfg) error
+		CheckPasswordResetData(c *fiber.Ctx, appCfg *config.AppCfg, passwordReset *types.PasswordResetForm) error
 	}
 )
 
@@ -35,9 +35,9 @@ type PasswordResetMiddleWare struct {
 	types.IRegisterService
 }
 
-func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetEmailToken(c *fiber.Ctx, appConfig *config.AppCfg) error {
+func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetEmailToken(c *fiber.Ctx, appCfg *config.AppCfg) error {
 	token := c.Query("t")
-	err := _validatePasswordReset(c, appConfig, token)
+	err := _validatePasswordReset(c, appCfg, token)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(
 			fiber.Map{
@@ -48,7 +48,7 @@ func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetEmailTo
 	return c.Next()
 }
 
-func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetToken(c *fiber.Ctx, appConfig *config.AppCfg) error {
+func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetToken(c *fiber.Ctx, appCfg *config.AppCfg) error {
 	token := &types.PasswordResetTokenForm{}
 	if err := pkg.CustomBodyParser(c, token); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -56,7 +56,7 @@ func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetToken(c
 			"message": "Validation error",
 		})
 	}
-	err := _validatePasswordReset(c, appConfig, token.Token)
+	err := _validatePasswordReset(c, appCfg, token.Token)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   err.Error(),
@@ -67,14 +67,14 @@ func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetToken(c
 	return c.Next()
 }
 
-func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetData(c *fiber.Ctx, appConfig *config.AppCfg, passwordReset *types.PasswordResetForm) error {
+func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetData(c *fiber.Ctx, appCfg *config.AppCfg, passwordReset *types.PasswordResetForm) error {
 	if err := pkg.CustomBodyParser(c, passwordReset); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   err.Error(),
 			"message": "Validation error",
 		})
 	}
-	if err := _validatePasswordReset(c, appConfig, passwordReset.Token); err != nil {
+	if err := _validatePasswordReset(c, appCfg, passwordReset.Token); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   err.Error(),
 			"message": "Validation error",
@@ -89,7 +89,7 @@ func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetData(c 
 			"message": "Invalid email address",
 		})
 	}
-	_, errPasswordReset := passwordResetMiddleWare.ModifyPassword(user.ID, passwordReset)
+	_, errPasswordReset := passwordResetMiddleWare.ModifyUserPassword(user.ID, passwordReset)
 
 	if errPasswordReset != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -113,8 +113,8 @@ func (middleWare *passwordResetMiddleWare) ValidatePasswordResetData(c *fiber.Ct
 	return middleWare.passwordResetType.CheckPasswordResetData(c, middleWare.AppCfg, passwordReset)
 }
 
-func _validatePasswordReset(c *fiber.Ctx, appConfig *config.AppCfg, t string) error {
-	t = pkg.Decrypt(t, appConfig.Server.Key)
+func _validatePasswordReset(c *fiber.Ctx, appCfg *config.AppCfg, t string) error {
+	t = pkg.Decrypt(t, appCfg.Server.Key)
 	emailParts := strings.Split(t, "-reset-")
 
 	if len(emailParts) != 2 {
@@ -137,9 +137,9 @@ func _validatePasswordReset(c *fiber.Ctx, appConfig *config.AppCfg, t string) er
 	return nil
 }
 
-func NewPasswordResetMiddleWare(passwordResetType IPasswordResetValidator, appConfig *config.AppCfg) IPasswordResetMiddleWare {
+func NewPasswordResetMiddleWare(passwordResetType IPasswordResetValidator, appCfg *config.AppCfg) IPasswordResetMiddleWare {
 	return &passwordResetMiddleWare{
 		passwordResetType: passwordResetType,
-		AppCfg:            appConfig,
+		AppCfg:            appCfg,
 	}
 }

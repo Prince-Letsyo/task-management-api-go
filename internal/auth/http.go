@@ -37,9 +37,9 @@ func newHTTPController(cfgs ...httpConfiguration) (*httpController, error) {
 	return acs, nil
 }
 
-func withAuthController(auth Auth, appConfig *config.AppCfg) httpConfiguration {
+func withAuthController(auth Auth, appCfg *config.AppCfg) httpConfiguration {
 	return func(acs *httpController) error {
-		acs.auth = newAuthController(auth, appConfig)
+		acs.auth = newAuthController(auth, appCfg)
 		return nil
 	}
 }

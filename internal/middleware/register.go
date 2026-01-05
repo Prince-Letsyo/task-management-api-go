@@ -15,7 +15,7 @@ type (
 	}
 
 	IRegisterValidatorToken interface {
-		ValidateToken(c *fiber.Ctx, email string, user *types.User, appConfig *config.AppCfg) error
+		ValidateToken(c *fiber.Ctx, email string, user *types.User, appCfg *config.AppCfg) error
 		Validate(c *fiber.Ctx, register *types.RegisterForm) error
 	}
 )
@@ -27,7 +27,7 @@ type registerMiddleWare struct {
 
 func (middleWare *registerMiddleWare) ValidateConfirmToken(c *fiber.Ctx) error {
 	user := &types.User{}
-	t := pkg.Decrypt(c.Query("t"), middleWare.AppCfg.Server.Key)
+	t := pkg.Decrypt(c.Query("t"), middleWare.Server.Key)
 	return middleWare.registerType.ValidateToken(c, t, user, middleWare.AppCfg)
 }
 
@@ -50,7 +50,7 @@ func (registerMiddleWare RegisterMiddleWare) Validate(context *fiber.Ctx, regist
 			},
 		)
 	}
-	r, errRegister := registerMiddleWare.NewRegisterService(register)
+	r, errRegister := registerMiddleWare.NewUser(register)
 	if errRegister != nil {
 		return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   errRegister.Error(),
@@ -61,7 +61,7 @@ func (registerMiddleWare RegisterMiddleWare) Validate(context *fiber.Ctx, regist
 	return context.Next()
 }
 
-func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t string, user *types.User, appConfig *config.AppCfg) error {
+func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t string, user *types.User, appCfg *config.AppCfg) error {
 	_, err := registerMiddleWare.ViewByEmail(t, user)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -70,14 +70,14 @@ func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t strin
 		})
 	}
 
-	if user.EmailVerified {
+	if user.IsVerified {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error":   "Email was already validated",
 			"message": "Error on token verification request",
 		})
 	}
 
-	user.EmailVerified = true
+	user.IsVerified = true
 	vUser, err := registerMiddleWare.Modify(user.ID, user)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -90,7 +90,7 @@ func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t strin
 		NewAccountAdapterService(
 			service.AccountAdapterService{
 				IUserService: registerMiddleWare.IUserService,
-				AppCfg:       appConfig,
+				AppCfg:       appCfg,
 			},
 		).
 		Login(c, vUser)
@@ -104,9 +104,9 @@ func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t strin
 	return c.Next()
 }
 
-func NewRegisterMiddleWare(registerType IRegisterValidatorToken, appConfig *config.AppCfg) IRegisterMiddleWare {
+func NewRegisterMiddleWare(registerType IRegisterValidatorToken, appCfg *config.AppCfg) IRegisterMiddleWare {
 	return &registerMiddleWare{
 		registerType: registerType,
-		AppCfg:       appConfig,
+		AppCfg:       appCfg,
 	}
 }

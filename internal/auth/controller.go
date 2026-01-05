@@ -344,28 +344,28 @@ func (controller *authController) verifyToken() fiber.Handler {
 
 func newAuthController(
 	authC Auth,
-	appConfig *config.AppCfg,
+	appCfg *config.AppCfg,
 ) IAuthController {
 	controller := &authController{
 		Auth:   authC,
-		AppCfg: appConfig,
+		AppCfg: appCfg,
 	}
 	registerMiddleWare := middleware.NewRegisterMiddleWare(
 		middleware.RegisterMiddleWare{
 			IUserService:     controller.userService,
 			IRegisterService: controller.registerService,
-		}, appConfig)
+		}, appCfg)
 
 	loginMiddleWare := middleware.NewLoginMiddleWare(
 		middleware.LoginMiddleWare{
 			IUserService:  controller.userService,
 			ILoginService: controller.loginService,
-		}, appConfig)
+		}, appCfg)
 	passwordMiddleWare := middleware.NewPasswordResetMiddleWare(
 		middleware.PasswordResetMiddleWare{
 			IUserService:     controller.userService,
 			IRegisterService: controller.registerService,
-		}, appConfig)
+		}, appCfg)
 	controller.router.Post(
 		"register",
 		loginMiddleWare.RedirectToHomePageOnLogin,

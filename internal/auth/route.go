@@ -1,3 +1,4 @@
+// Package auth implements the authentication routes for the auth.
 package auth
 
 import (
@@ -6,22 +7,21 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func LoadAuthRoutes(router fiber.Router, appConfig *config.AppCfg) {
+func LoadAuthRoutes(router fiber.Router, appCfg *config.AppCfg) {
 	userService, err := user.NewUserService(
-		appConfig,
+		appCfg,
 		user.WithDatabaseUserRepository())
 	if err != nil {
 		panic(err.Error())
 	}
 	registerService, err := newRegisterService(
-		appConfig,
 		withDatabaseRegisterRepository(userService))
 	if err != nil {
 		panic(err.Error())
 	}
 
 	loginService, err := newLoginService(
-		appConfig,
+		appCfg,
 		withDatabaseLoginRepository(userService))
 	if err != nil {
 		panic(err.Error())
@@ -34,7 +34,7 @@ func LoadAuthRoutes(router fiber.Router, appConfig *config.AppCfg) {
 				userService:     userService,
 				registerService: registerService,
 				loginService:    loginService,
-			}, appConfig)); err != nil {
+			}, appCfg)); err != nil {
 		panic(err.Error())
 	}
 }

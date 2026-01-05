@@ -11,6 +11,14 @@ type UserService struct {
 	*config.AppCfg
 }
 
+func (us *UserService) Save(user *types.User) (*types.User, error) {
+	u, err := us.store(user)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create user")
+	}
+	return u, nil
+}
+
 func (us *UserService) ViewByID(id uint, user *types.User) (*types.User, error) {
 	u, errUser := us.retrieveByID(id, user)
 	if errUser != nil {
@@ -54,9 +62,9 @@ func (us *UserService) Modify(id uint, user *types.User) (*types.User, error) {
 type UserServiceConfiguration func(us *UserService) error
 
 // NewUserService returns new UserService.
-func NewUserService(appConfig *config.AppCfg, cfgs ...UserServiceConfiguration) (*UserService, error) {
+func NewUserService(appCfg *config.AppCfg, cfgs ...UserServiceConfiguration) (*UserService, error) {
 	us := &UserService{
-		AppCfg: appConfig,
+		AppCfg: appCfg,
 	}
 
 	for _, cfg := range cfgs {

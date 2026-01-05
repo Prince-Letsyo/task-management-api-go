@@ -17,7 +17,7 @@ type (
 
 	ILoginValidator interface {
 		Validate(c *fiber.Ctx, login *types.Login) error
-		RedirectLogin(c *fiber.Ctx, appConfig *config.AppCfg) error
+		RedirectLogin(c *fiber.Ctx, appCfg *config.AppCfg) error
 	}
 )
 
@@ -40,11 +40,11 @@ type LoginMiddleWare struct {
 	types.ILoginService
 }
 
-func (loginMiddleWare LoginMiddleWare) RedirectLogin(c *fiber.Ctx, appConfig *config.AppCfg) error {
+func (loginMiddleWare LoginMiddleWare) RedirectLogin(c *fiber.Ctx, appCfg *config.AppCfg) error {
 	redirectService := service.NewAccountAdapterService(
 		service.AccountAdapterService{
 			IUserService: loginMiddleWare.IUserService,
-			AppCfg:       appConfig,
+			AppCfg:       appCfg,
 		},
 	)
 	user, err := redirectService.User(c)
@@ -81,9 +81,9 @@ func (loginMiddleWare LoginMiddleWare) Validate(c *fiber.Ctx, login *types.Login
 	return c.Next()
 }
 
-func NewLoginMiddleWare(loginType ILoginValidator, appConfig *config.AppCfg) ILoginMiddleWare {
+func NewLoginMiddleWare(loginType ILoginValidator, appCfg *config.AppCfg) ILoginMiddleWare {
 	return &loginMiddleWare{
 		loginType: loginType,
-		AppCfg:    appConfig,
+		AppCfg:    appCfg,
 	}
 }

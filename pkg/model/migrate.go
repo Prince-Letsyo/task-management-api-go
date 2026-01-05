@@ -7,9 +7,9 @@ import (
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 )
 
-func Migrate(appConfig *config.AppCfg) {
+func Migrate(appCfg *config.AppCfg) {
 	log.Println("Initiating migration...")
-	err := appConfig.Database.DB.Migrator().AutoMigrate()
+	err := appCfg.Database.DB.Migrator().AutoMigrate()
 	if err != nil {
 		panic(err)
 	}

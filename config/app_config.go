@@ -22,15 +22,14 @@ type AppCfg struct {
 	View       ViewConfig     `yaml:"view" `
 	JwtSecrets JwtSecrets     `yaml:"jwt"`
 	Database   DatabaseConfig `yaml:"database"`
-	Hash       Hash
-	Mail       Mail          `yaml:"mail"`
-	Redis      Redis         `json:"redis" yaml:"redis" env-prefix:"REDIS_"`
-	Postgres   Postgres      `json:"postgres" yaml:"postgres" env-prefix:"POSTGRES_"`
-	Swagger    Swagger       `json:"swagger" yaml:"swagger" env-prefix:"SWAGGER_"`
-	Log        LogConfig     `yaml:"log"`
-	Cache      CacheConfig   `yaml:"cache"`
-	Storage    StorageConfig `yaml:"storage"`
-	Session    SessionConfig `yaml:"session"`
+	Mail       Mail           `yaml:"mail"`
+	Redis      Redis          `json:"redis" yaml:"redis" env-prefix:"REDIS_"`
+	Postgres   Postgres       `json:"postgres" yaml:"postgres" env-prefix:"POSTGRES_"`
+	Swagger    Swagger        `json:"swagger" yaml:"swagger" env-prefix:"SWAGGER_"`
+	Log        LogConfig      `yaml:"log"`
+	Cache      CacheConfig    `yaml:"cache"`
+	Storage    StorageConfig  `yaml:"storage"`
+	Session    SessionConfig  `yaml:"session"`
 	ConfigFile string
 }
 

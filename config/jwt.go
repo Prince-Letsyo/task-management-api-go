@@ -28,12 +28,12 @@ type JwtSecrets struct {
 	RefreshExpire int64     `yaml:"refresh_expire"`
 	AccessExpire  int64     `yaml:"access_expire"`
 	App           JwtConfig `yaml:"app"`
-	Api           JwtConfig `yaml:"api"`
+	API           JwtConfig `yaml:"api"`
 }
 
 func (tokenJWT *JwtSecrets) NewAccessToken(claims jwt.Claims) (string, error) {
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedStr, err := accessToken.SignedString([]byte(tokenJWT.Api.Secret))
+	signedStr, err := accessToken.SignedString([]byte(tokenJWT.API.Secret))
 	if err != nil {
 		return "", err
 	}
@@ -42,7 +42,7 @@ func (tokenJWT *JwtSecrets) NewAccessToken(claims jwt.Claims) (string, error) {
 
 func (tokenJWT *JwtSecrets) NewRefreshToken(claims jwt.Claims) (string, error) {
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedStr, err := refreshToken.SignedString([]byte(tokenJWT.Api.Secret))
+	signedStr, err := refreshToken.SignedString([]byte(tokenJWT.API.Secret))
 	if err != nil {
 		return "", err
 	}
@@ -54,7 +54,7 @@ func (tokenJWT *JwtSecrets) ParseAccessToken(accessToken string) (*UserClaims, e
 		accessToken,
 		&UserClaims{},
 		func(token *jwt.Token) (interface{}, error) {
-			return []byte(tokenJWT.Api.Secret), nil
+			return []byte(tokenJWT.API.Secret), nil
 		})
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (tokenJWT *JwtSecrets) ParseRefreshToken(refreshToken string) (*UserClaims,
 		refreshToken,
 		&UserClaims{},
 		func(token *jwt.Token) (interface{}, error) {
-			return []byte(tokenJWT.Api.Secret), nil
+			return []byte(tokenJWT.API.Secret), nil
 		})
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (tokenJWT *JwtSecrets) GetAPPConfig() *JwtConfig {
 }
 
 func (tokenJWT *JwtSecrets) GetAPIConfig() *JwtConfig {
-	return &tokenJWT.Api
+	return &tokenJWT.API
 }
 
 func (tokenJWT *JwtSecrets) GetAPIAccessExpireDuration() time.Duration {

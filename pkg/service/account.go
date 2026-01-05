@@ -28,17 +28,17 @@ type (
 		getAccountSession(duration time.Duration, c *fiber.Ctx) (*session.Session, error)
 	}
 	IAdapterService interface {
-		SendPasswordResetEmail(email string, baseURL string, appConfig *config.AppCfg)
-		SendConfirmationEmail(email string, baseURL string, appConfig *config.AppCfg)
-		Login(c *fiber.Ctx, user *types.User, appConfig *config.AppCfg) error
-		UserID(c *fiber.Ctx, appConfig *config.AppCfg) (uint, error)
-		UserClaims(c *fiber.Ctx, appConfig *config.AppCfg) (*config.UserClaims, error)
-		User(c *fiber.Ctx, appConfig *config.AppCfg) (*types.User, error)
-		IsLoggedIn(c *fiber.Ctx, appConfig *config.AppCfg) bool
-		Logout(c *fiber.Ctx, appConfig *config.AppCfg) error
-		AccessTokenCreate(c *fiber.Ctx, user *types.User, appConfig *config.AppCfg) error
-		RefreshTokenCreate(c *fiber.Ctx, user *types.User, appConfig *config.AppCfg) error
-		getAccountSession(duration time.Duration, c *fiber.Ctx, appConfig *config.AppCfg) (*session.Session, error)
+		SendPasswordResetEmail(email string, baseURL string, appCfg *config.AppCfg)
+		SendConfirmationEmail(email string, baseURL string, appCfg *config.AppCfg)
+		Login(c *fiber.Ctx, user *types.User, appCfg *config.AppCfg) error
+		UserID(c *fiber.Ctx, appCfg *config.AppCfg) (uint, error)
+		UserClaims(c *fiber.Ctx, appCfg *config.AppCfg) (*config.UserClaims, error)
+		User(c *fiber.Ctx, appCfg *config.AppCfg) (*types.User, error)
+		IsLoggedIn(c *fiber.Ctx, appCfg *config.AppCfg) bool
+		Logout(c *fiber.Ctx, appCfg *config.AppCfg) error
+		AccessTokenCreate(c *fiber.Ctx, user *types.User, appCfg *config.AppCfg) error
+		RefreshTokenCreate(c *fiber.Ctx, user *types.User, appCfg *config.AppCfg) error
+		getAccountSession(duration time.Duration, c *fiber.Ctx, appCfg *config.AppCfg) (*session.Session, error)
 	}
 )
 
@@ -97,8 +97,8 @@ func NewAccountAdapterService(adapterType IAdapterService) IAccountAdapterServic
 	}
 }
 
-func GenerateConfirmURL(email string, baseURL string, appConfig *config.AppCfg) string {
-	token := pkg.Encrypt(email, appConfig.Server.Key)
+func GenerateConfirmURL(email string, baseURL string, appCfg *config.AppCfg) string {
+	token := pkg.Encrypt(email, appCfg.Server.Key)
 	uri := fmt.Sprintf("%s?t=%s", baseURL, token)
 	return uri
 }
@@ -112,8 +112,8 @@ func GenerateConfirmPath(context *fiber.Ctx, redirect string) string {
 	return redirect
 }
 
-func GeneratePasswordResetURL(email string, baseURL string, appConfig *config.AppCfg) string {
-	token := pkg.Encrypt(email, appConfig.Server.Key)
+func GeneratePasswordResetURL(email string, baseURL string, appCfg *config.AppCfg) string {
+	token := pkg.Encrypt(email, appCfg.Server.Key)
 	uri := fmt.Sprintf("%s/?t=%s", baseURL, token)
 	return uri
 }
@@ -123,9 +123,9 @@ type AccountAdapterService struct {
 	*config.AppCfg
 }
 
-func (adapter AccountAdapterService) SendPasswordResetEmail(email string, baseURL string, appConfig *config.AppCfg) {
+func (adapter AccountAdapterService) SendPasswordResetEmail(email string, baseURL string, appCfg *config.AppCfg) {
 	resetEmail := fmt.Sprintf("%s-reset-%d", email, time.Now().Unix())
-	resetLink := GeneratePasswordResetURL(resetEmail, baseURL, appConfig)
+	resetLink := GeneratePasswordResetURL(resetEmail, baseURL, appCfg)
 	fmt.Println(resetLink)
 	// htmlBody := app.Http.Mail.PrepareHtml("emails/password-reset", fiber.Map{
 	// 	"reset_link": resetLink,
@@ -133,8 +133,8 @@ func (adapter AccountAdapterService) SendPasswordResetEmail(email string, baseUR
 	// app.Http.Mail.Send(email, "You asked to reset? Please click here!", htmlBody, "", "")
 }
 
-func (adapter AccountAdapterService) SendConfirmationEmail(email string, baseURL string, appConfig *config.AppCfg) {
-	confirmLink := GenerateConfirmURL(email, baseURL, appConfig)
+func (adapter AccountAdapterService) SendConfirmationEmail(email string, baseURL string, appCfg *config.AppCfg) {
+	confirmLink := GenerateConfirmURL(email, baseURL, appCfg)
 	fmt.Println(confirmLink)
 	// htmlBody := app.Http.Mail.PrepareHtml("emails/confirm", fiber.Map{
 	// 	"confirm_link": confirmLink,
@@ -142,25 +142,25 @@ func (adapter AccountAdapterService) SendConfirmationEmail(email string, baseURL
 	// app.Http.Mail.Send(email, "Is it you? Please confirm!", htmlBody, "", "")
 }
 
-func (adapter AccountAdapterService) UserClaims(c *fiber.Ctx, appConfig *config.AppCfg) (*config.UserClaims, error) {
+func (adapter AccountAdapterService) UserClaims(c *fiber.Ctx, appCfg *config.AppCfg) (*config.UserClaims, error) {
 	accessToken := c.Cookies("access-token")
 	accessClaim := &config.UserClaims{}
 	if accessToken == "" {
-		sess, err := appConfig.Session.Get(c)
+		sess, err := appCfg.Session.Get(c)
 		if err != nil {
 			return accessClaim, err
 		}
 		accessToken = sess.Get("access-token").(string)
 	}
-	accessClaim, err := appConfig.JwtSecrets.ParseAccessToken(accessToken)
+	accessClaim, err := appCfg.JwtSecrets.ParseAccessToken(accessToken)
 	if err != nil {
 		return accessClaim, err
 	}
 	return accessClaim, nil
 }
 
-func (adapter AccountAdapterService) User(c *fiber.Ctx, appConfig *config.AppCfg) (*types.User, error) {
-	userClaims, err := adapter.UserClaims(c, appConfig)
+func (adapter AccountAdapterService) User(c *fiber.Ctx, appCfg *config.AppCfg) (*types.User, error) {
+	userClaims, err := adapter.UserClaims(c, appCfg)
 	if err != nil {
 		return &types.User{}, err
 	}
@@ -172,8 +172,8 @@ func (adapter AccountAdapterService) User(c *fiber.Ctx, appConfig *config.AppCfg
 	return user, nil
 }
 
-func (adapter AccountAdapterService) UserID(c *fiber.Ctx, appConfig *config.AppCfg) (uint, error) {
-	accessClaim, err := adapter.UserClaims(c, appConfig)
+func (adapter AccountAdapterService) UserID(c *fiber.Ctx, appCfg *config.AppCfg) (uint, error) {
+	accessClaim, err := adapter.UserClaims(c, appCfg)
 	if err != nil {
 		return 0, err
 	}
@@ -184,15 +184,15 @@ func (adapter AccountAdapterService) UserID(c *fiber.Ctx, appConfig *config.AppC
 	return uint(id), nil
 }
 
-func (adapter AccountAdapterService) IsLoggedIn(context *fiber.Ctx, appConfig *config.AppCfg) bool {
+func (adapter AccountAdapterService) IsLoggedIn(context *fiber.Ctx, appCfg *config.AppCfg) bool {
 	token := context.Cookies("refresh-token")
 	if token == "" {
-		if sess, err := appConfig.Session.Get(context); err != nil {
+		if sess, err := appCfg.Session.Get(context); err != nil {
 			return false
 		} else {
 			token = sess.Get("refresh-token").(string)
 			if token != "" {
-				parsedTokenClaim, err := appConfig.JwtSecrets.ParseRefreshToken(token)
+				parsedTokenClaim, err := appCfg.JwtSecrets.ParseRefreshToken(token)
 				if err != nil {
 					return false
 				}
@@ -205,7 +205,7 @@ func (adapter AccountAdapterService) IsLoggedIn(context *fiber.Ctx, appConfig *c
 			}
 		}
 	} else {
-		parsedTokenClaim, err := appConfig.JwtSecrets.ParseRefreshToken(token)
+		parsedTokenClaim, err := appCfg.JwtSecrets.ParseRefreshToken(token)
 		if err != nil {
 			return false
 		}
@@ -217,12 +217,12 @@ func (adapter AccountAdapterService) IsLoggedIn(context *fiber.Ctx, appConfig *c
 	return token != ""
 }
 
-func (adapter AccountAdapterService) AccessTokenCreate(context *fiber.Ctx, user *types.User, appConfig *config.AppCfg) error {
+func (adapter AccountAdapterService) AccessTokenCreate(context *fiber.Ctx, user *types.User, appCfg *config.AppCfg) error {
 	accessClaims := config.NewUserClaims(
 		*user,
-		appConfig.JwtSecrets.GetAPIAccessExpireDuration(),
+		appCfg.JwtSecrets.GetAPIAccessExpireDuration(),
 	)
-	accesstoken, err := appConfig.JwtSecrets.NewAccessToken(accessClaims)
+	accesstoken, err := appCfg.JwtSecrets.NewAccessToken(accessClaims)
 	if err != nil {
 		return err
 	}
@@ -231,7 +231,7 @@ func (adapter AccountAdapterService) AccessTokenCreate(context *fiber.Ctx, user 
 	if err == nil {
 		if sess, err := adapter.getAccountSession(
 			time.Until(expire.Time),
-			context, appConfig); err != nil {
+			context, appCfg); err != nil {
 			return err
 		} else {
 			sess.Set("access-token", accesstoken)
@@ -253,19 +253,19 @@ func (adapter AccountAdapterService) AccessTokenCreate(context *fiber.Ctx, user 
 	return nil
 }
 
-func (adapter AccountAdapterService) RefreshTokenCreate(context *fiber.Ctx, user *types.User, appConfig *config.AppCfg) error {
+func (adapter AccountAdapterService) RefreshTokenCreate(context *fiber.Ctx, user *types.User, appCfg *config.AppCfg) error {
 	refreshClaims := config.NewUserClaims(
 		*user,
-		appConfig.JwtSecrets.GetAPIRefreshExpireDuration(),
+		appCfg.JwtSecrets.GetAPIRefreshExpireDuration(),
 	)
-	refreshtoken, err := appConfig.JwtSecrets.NewRefreshToken(refreshClaims)
+	refreshtoken, err := appCfg.JwtSecrets.NewRefreshToken(refreshClaims)
 	if err != nil {
 		return err
 	}
 	expire, err := refreshClaims.GetExpirationTime()
 
 	if err == nil {
-		if sess, err := adapter.getAccountSession(time.Until(expire.Time), context, appConfig); err != nil {
+		if sess, err := adapter.getAccountSession(time.Until(expire.Time), context, appCfg); err != nil {
 			return err
 		} else {
 			sess.Set("refresh-token", refreshtoken)
@@ -287,8 +287,8 @@ func (adapter AccountAdapterService) RefreshTokenCreate(context *fiber.Ctx, user
 	return nil
 }
 
-func (adapter AccountAdapterService) getAccountSession(duration time.Duration, context *fiber.Ctx, appConfig *config.AppCfg) (*session.Session, error) {
-	sess, errS := appConfig.Session.Get(context) // get/create new session
+func (adapter AccountAdapterService) getAccountSession(duration time.Duration, context *fiber.Ctx, appCfg *config.AppCfg) (*session.Session, error) {
+	sess, errS := appCfg.Session.Get(context) // get/create new session
 	sess.SetExpiry(duration)
 	if errS != nil {
 		return &session.Session{}, errS
@@ -297,19 +297,19 @@ func (adapter AccountAdapterService) getAccountSession(duration time.Duration, c
 	return sess, nil
 }
 
-func (adapter AccountAdapterService) Login(context *fiber.Ctx, user *types.User, appConfig *config.AppCfg) error {
-	if err := adapter.AccessTokenCreate(context, user, appConfig); err != nil {
+func (adapter AccountAdapterService) Login(context *fiber.Ctx, user *types.User, appCfg *config.AppCfg) error {
+	if err := adapter.AccessTokenCreate(context, user, appCfg); err != nil {
 		return err
 	}
 
-	if err := adapter.RefreshTokenCreate(context, user, appConfig); err != nil {
+	if err := adapter.RefreshTokenCreate(context, user, appCfg); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (adapter AccountAdapterService) Logout(context *fiber.Ctx, appConfig *config.AppCfg) error {
-	if sess, err := appConfig.Session.Get(context); err != nil {
+func (adapter AccountAdapterService) Logout(context *fiber.Ctx, appCfg *config.AppCfg) error {
+	if sess, err := appCfg.Session.Get(context); err != nil {
 		return err
 	} else {
 		if err = sess.Destroy(); err != nil {

@@ -16,6 +16,8 @@ var (
 	ErrBookNotFound        = errors.New("book not found")
 	ErrUserNotFound        = errors.New("user not found")
 	ErrUserSettingNotFound = errors.New("user setting not found")
+	ErrProfileNotFound     = errors.New("profile not found")
+	ErrInternalServer      = errors.New("internal server error")
 )
 
 type httpError struct {

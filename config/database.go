@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
@@ -12,45 +11,40 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"gorm.io/plugin/dbresolver"
 )
 
 type DatabaseDriver struct {
 	Driver            string        `yaml:"driver" env:"DB_DRIVER"`
-	Host              string        `json:"host" yaml:"host" env:"DB_HOST" env-default:"127.0.0.1"`
+	Host              string        `yaml:"host" env:"DB_HOST" env-default:"127.0.0.1"`
 	Username          string        `yaml:"username" env:"DB_USER"`
-	Password          string        `json:"password" yaml:"password" env:"DB_PASS" env-default:"postgres"`
+	Password          string        `yaml:"password" env:"DB_PASS"`
 	DBName            string        `yaml:"db_name" env:"DB_NAME"`
-	Port              int           `json:"port" yaml:"port" env:"DB_PORT" env-default:"5432"`
-	Connections       int           `yaml:"connections" env:"DB_CONNECTIONS"`
-	SslMode           string        `json:"ssl_mode" yaml:"sslMode" env:"DB_SSL_MODE" env-default:"disable"`
-	MaxConns          int           `json:"max_conns" yaml:"maxConns" env:"MAX_CONNS" env-default:"10"`
-	MinConns          int           `json:"min_conns" yaml:"minConns" env:"MIN_CONNS" env-default:"2"`
-	MaxConnLifetime   time.Duration `json:"max_conn_lifetime" yaml:"maxConnLifetime" env:"MAX_CONN_LIFETIME" env-default:"10m"`
-	MaxConnIdleTime   time.Duration `json:"max_conn_idle_time" yaml:"maxConnIdleTime" env:"MAX_CONN_IDLE_TIME" env-default:"1m"`
-	HealthCheckPeriod time.Duration `json:"health_check_period" yaml:"healthCheckPeriod" env:"HEALTH_CHECK_PERIOD" env-default:"10s"`
+	Port              int           `yaml:"port" env:"DB_PORT" env-default:"5432"`
+	SslMode           string        `yaml:"ssl_mode" env:"DB_SSL_MODE" env-default:"disable"`
+	MaxConns          int           `yaml:"max_conns" env:"MAX_CONNS" env-default:"25"`
+	MinConns          int           `yaml:"min_conns" env:"MIN_CONNS" env-default:"5"`
+	MaxConnLifetime   time.Duration `yaml:"max_conn_lifetime" env:"MAX_CONN_LIFETIME" env-default:"30m"`
+	MaxConnIdleTime   time.Duration `yaml:"max_conn_idle_time" env:"MAX_CONN_IDLE_TIME" env-default:"10m"`
+	HealthCheckPeriod time.Duration `yaml:"health_check_period" env:"HEALTH_CHECK_PERIOD" env-default:"1m"`
 }
 
 type DatabaseConfig struct {
 	*gorm.DB
 	Drivers map[string]DatabaseDriver `yaml:"drivers"`
-	Default DatabaseDriver            `yaml:"default" env:"DEFAULT_DB_DRIVER"`
+	Default DatabaseDriver            `yaml:"default"`
 }
 
+// Setup initializes the database connection
 func (d *DatabaseConfig) Setup() error {
-	//nolint:wsl,lll
-	var err error //nolint:wsl
-	connectionString := ""
 	if d.DB != nil {
-		return nil
+		return nil // Already initialized
 	}
-	gormLogger := New(&log.DefaultLogger, logger.Config{
-		LogLevel: 0,
-	}, false)
-	newLogger := gormLogger.LogMode(logger.Info)
+
+	var dialector gorm.Dialector
+
 	switch d.Default.Driver {
-	case "postgres":
-		connectionString = fmt.Sprintf(
+	case "postgres", "postgresql":
+		dsn := fmt.Sprintf(
 			"host=%s port=%d user=%s dbname=%s password=%s sslmode=%s",
 			d.Default.Host,
 			d.Default.Port,
@@ -59,132 +53,174 @@ func (d *DatabaseConfig) Setup() error {
 			d.Default.Password,
 			d.Default.SslMode,
 		)
-		d.DB, err = gorm.Open(postgres.Open(connectionString), &gorm.Config{
-			DisableForeignKeyConstraintWhenMigrating: true,
-			Logger:                                   newLogger,
-		})
+		dialector = postgres.Open(dsn)
 
-	default:
-		connectionString = fmt.Sprintf(
-			"%s:%s@tcp(%s:%d)/%s?charset=utf8&parseTime=True&loc=Local",
+	case "mysql":
+		dsn := fmt.Sprintf(
+			"%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 			d.Default.Username,
 			d.Default.Password,
 			d.Default.Host,
 			d.Default.Port,
 			d.Default.DBName,
 		)
-		d.DB, err = gorm.Open(mysql.Open(connectionString), &gorm.Config{
-			DisableForeignKeyConstraintWhenMigrating: true,
-			Logger:                                   newLogger,
-		})
+		dialector = mysql.Open(dsn)
+
+	default:
+		return fmt.Errorf("unsupported database driver: %s", d.Default.Driver)
 	}
+
+	gormLogger := NewGORMLogger(&log.DefaultLogger, logger.Config{
+		SlowThreshold:             time.Second,
+		LogLevel:                  logger.Info,
+		IgnoreRecordNotFoundError: true,
+		Colorful:                  true,
+	})
+
+	db, err := gorm.Open(dialector, &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
+		Logger:                                   gormLogger,
+	})
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-	if err := d.Use(
-		dbresolver.Register(dbresolver.Config{}).
-			SetConnMaxLifetime(d.Default.MaxConnLifetime).
-			SetMaxIdleConns(100).
-			SetMaxOpenConns(100).
-			SetConnMaxIdleTime(d.Default.MaxConnIdleTime),
-	); err != nil {
-		return err
+
+	// Configure connection pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get underlying sql.DB: %w", err)
 	}
-	return nil //nolint:wsl
+
+	sqlDB.SetMaxOpenConns(d.Default.MaxConns)
+	sqlDB.SetMaxIdleConns(d.Default.MinConns)
+	sqlDB.SetConnMaxLifetime(d.Default.MaxConnLifetime)
+	sqlDB.SetConnMaxIdleTime(d.Default.MaxConnIdleTime)
+
+	// Background health check
+	if d.Default.HealthCheckPeriod > 0 {
+		go func() {
+			ticker := time.NewTicker(d.Default.HealthCheckPeriod)
+			defer ticker.Stop()
+			for range ticker.C {
+				if err := sqlDB.Ping(); err != nil {
+					log.DefaultLogger.Error().
+						Err(err).
+						Msg("Database health check failed")
+				}
+			}
+		}()
+	}
+
+	d.DB = db
+	return nil
 }
 
-func (d *DatabaseConfig) Paginate(filters *pkg.Filters) func(db *gorm.DB) *gorm.DB {
+// Close gracefully shuts down the connection pool
+func (d *DatabaseConfig) Close() error {
+	if d.DB == nil {
+		return nil
+	}
+	sqlDB, _ := d.DB.DB() // ignore error — we're closing anyway
+	return sqlDB.Close()
+}
+
+// Paginate returns a GORM scope for pagination
+func (d *DatabaseConfig) Paginate(filters *pkg.Filters) func(*gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		if filters.Offset <= 0 {
-			filters.Offset = 1
-		}
-		switch {
-		case filters.Limit > pkg.MaxPageLimit:
-			filters.Limit = pkg.MaxPageLimit
-		case filters.Limit <= 0:
+		// Sanitize inputs
+		if filters.Limit <= 0 {
 			filters.Limit = pkg.DefaultPageLimit
 		}
+		if filters.Limit > pkg.MaxPageLimit {
+			filters.Limit = pkg.MaxPageLimit
+		}
+		if filters.Offset < 1 {
+			filters.Offset = 1
+		}
 
-		dbClone := db.Session(&gorm.Session{})
+		// Calculate offset (page-based → zero-based)
+		offset := (filters.Offset - 1) * filters.Limit
 
+		// Count total records for pagination metadata
 		var total int64
-		dbClone.Count(&total)
+		db.Count(&total)
+		filters.Total = total // Total records, not pages!
 
-		filters.Total = int64(math.Ceil(float64(total) / float64(filters.Limit)))
-
-		filters.Offset = (filters.Offset - 1) * filters.Limit
-		return db.Offset(int(filters.Offset)).Limit(int(filters.Limit))
+		return db.Offset(int(offset)).Limit(int(filters.Limit))
 	}
 }
 
-func New(logger *log.Logger, config logger.Config, slient bool) logger.Interface {
-	return &gormLogger{
-		Log:    logger,
-		Config: config,
-		Slient: slient,
-	}
-}
+// === Custom GORM Logger ===
 
 type gormLogger struct {
-	Log    *log.Logger
-	Config logger.Config
-	Slient bool
+	logger *log.Logger
+	config logger.Config
+}
+
+// NewGORMLogger creates a bridge from oarkflow/log to GORM's logger interface
+func NewGORMLogger(l *log.Logger, config logger.Config) logger.Interface {
+	return &gormLogger{
+		logger: l,
+		config: config,
+	}
 }
 
 func (l *gormLogger) LogMode(level logger.LogLevel) logger.Interface {
-	newLogger := gormLogger{Log: l.Log}
-	switch level {
-	case logger.Silent:
-		newLogger.Slient = true
-	case logger.Error:
-		newLogger.Log.SetLevel(log.ErrorLevel)
-	case logger.Warn:
-		newLogger.Log.SetLevel(log.WarnLevel)
-	case logger.Info:
-		newLogger.Log.SetLevel(log.InfoLevel)
+	newConfig := l.config
+	newConfig.LogLevel = level
+	return &gormLogger{
+		logger: l.logger,
+		config: newConfig,
 	}
-
-	return &newLogger
 }
 
-func (l *gormLogger) Info(ctx context.Context, format string, args ...interface{}) {
-	l.Log.Info().Msgf(format, args...)
+func (l *gormLogger) Info(ctx context.Context, msg string, data ...interface{}) {
+	if l.config.LogLevel >= logger.Info {
+		l.logger.Info().Msgf(msg, data...)
+	}
 }
 
-func (l *gormLogger) Warn(ctx context.Context, format string, args ...interface{}) {
-	l.Log.Warn().Msgf(format, args...)
+func (l *gormLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
+	if l.config.LogLevel >= logger.Warn {
+		l.logger.Warn().Msgf(msg, data...)
+	}
 }
 
-func (l *gormLogger) Error(ctx context.Context, format string, args ...interface{}) {
-	l.Log.Error().Msgf(format, args...)
+func (l *gormLogger) Error(ctx context.Context, msg string, data ...interface{}) {
+	if l.config.LogLevel >= logger.Error {
+		l.logger.Error().Msgf(msg, data...)
+	}
 }
 
-func (l *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
-	if l.Slient {
+func (l *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
+	if l.config.LogLevel == logger.Silent {
 		return
 	}
+
 	elapsed := time.Since(begin)
+	sql, rows := fc()
+
 	switch {
-	case err != nil && l.Log.Level >= log.ErrorLevel:
-		sql, rows := fc()
-		if rows == -1 {
-			l.Log.Error().Caller(1).Err(err).Dur("elapsed", elapsed).Str("sql", sql).Msg("")
-		} else {
-			l.Log.Error().Caller(1).Err(err).Dur("elapsed", elapsed).Str("sql", sql).Int64("rows", rows).Msg("")
-		}
-	case elapsed > l.Config.SlowThreshold && l.Config.SlowThreshold != 0 && l.Log.Level >= log.WarnLevel:
-		sql, rows := fc()
-		if rows == -1 {
-			l.Log.Warn().Caller(1).Err(err).Dur("elapsed", elapsed).Str("sql", sql).Msgf("SLOW SQL >= %v", l.Config.SlowThreshold)
-		} else {
-			l.Log.Warn().Caller(1).Err(err).Dur("elapsed", elapsed).Str("sql", sql).Int64("rows", rows).Msgf("SLOW SQL >= %v", l.Config.SlowThreshold)
-		}
-	case l.Log.Level == log.InfoLevel:
-		sql, rows := fc()
-		if rows == -1 {
-			l.Log.Info().Caller(1).Err(err).Dur("elapsed", elapsed).Str("sql", sql).Msg("")
-		} else {
-			l.Log.Info().Caller(1).Err(err).Dur("elapsed", elapsed).Str("sql", sql).Int64("rows", rows).Msg("")
-		}
+	case err != nil && l.config.LogLevel >= logger.Error:
+		l.logger.Error().
+			Err(err).
+			Dur("elapsed", elapsed).
+			Str("sql", sql).
+			Int64("rows", rows).
+			Msg("GORM query error")
+
+	case elapsed > l.config.SlowThreshold && l.config.SlowThreshold != 0 && l.config.LogLevel >= logger.Warn:
+		l.logger.Warn().
+			Dur("elapsed", elapsed).
+			Str("sql", sql).
+			Int64("rows", rows).
+			Msgf("SLOW SQL > %v", l.config.SlowThreshold)
+
+	case l.config.LogLevel >= logger.Info:
+		l.logger.Info().
+			Dur("elapsed", elapsed).
+			Str("sql", sql).
+			Int64("rows", rows).
+			Msg("GORM query executed")
 	}
 }

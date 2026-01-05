@@ -2,6 +2,7 @@ package auth
 
 import (
 	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/pkg/errors"
 )
@@ -9,15 +10,12 @@ import (
 type RegisterServiceConfiguration func(rs *RegisterService) error
 
 type RegisterService struct {
-	IRegisterRepository
-	*config.AppCfg
+	types.IUserService
 }
 
 // NewRegisterService returns new RegisterService.
-func newRegisterService(appConfig *config.AppCfg, cfgs ...RegisterServiceConfiguration) (*RegisterService, error) {
-	rs := &RegisterService{
-		AppCfg: appConfig,
-	}
+func newRegisterService(cfgs ...RegisterServiceConfiguration) (*RegisterService, error) {
+	rs := &RegisterService{}
 
 	for _, cfg := range cfgs {
 		if err := cfg(rs); err != nil {
@@ -29,25 +27,36 @@ func newRegisterService(appConfig *config.AppCfg, cfgs ...RegisterServiceConfigu
 
 func withDatabaseRegisterRepository(userService types.IUserService) RegisterServiceConfiguration {
 	return func(rs *RegisterService) error {
-		rs.IRegisterRepository = NewDBRegisterRepository(userService, rs.AppCfg)
+		rs.IUserService = userService
 		return nil
 	}
 }
 
-func (registerService *RegisterService) NewRegisterService(register *types.RegisterForm) (*types.RegisterForm, error) {
-	r, errBook := registerService.store(register)
-	if errBook != nil {
-		return nil, errBook
+func (registerService *RegisterService) NewUser(register *types.RegisterForm) (*types.User, error) {
+	user := &types.User{
+		FirstName: register.FirstName,
+		LastName:  register.LastName,
+		Email:     register.Email,
+		UserName:  register.UserName,
+		Password:  register.Password,
 	}
-	return r, nil
+	if user, _ = registerService.ViewByEmail(user.Email, user); user != nil {
+		return nil, errors.New("user already exists")
+	}
+	if _, err := registerService.Save(user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
-func (registerService *RegisterService) ModifyPassword(id uint, passwordReset *types.PasswordResetForm) (*types.RegisterForm, error) {
-	b, err := registerService.updatePassword(id, passwordReset)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot update user password")
+func (registerService *RegisterService) ModifyUserPassword(id uint, passwordReset *types.PasswordResetForm) (*types.User, error) {
+	user := &types.User{
+		Password: passwordReset.Password,
 	}
-	return b, nil
+	if _, err := registerService.Modify(id, user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 type LoginServiceConfiguration func(ls *LoginService) error
@@ -58,9 +67,9 @@ type LoginService struct {
 }
 
 // NewLoginService returns new LoginService.
-func newLoginService(appConfig *config.AppCfg, cfgs ...LoginServiceConfiguration) (*LoginService, error) {
+func newLoginService(appCfg *config.AppCfg, cfgs ...LoginServiceConfiguration) (*LoginService, error) {
 	ls := &LoginService{
-		AppCfg: appConfig,
+		AppCfg: appCfg,
 	}
 
 	for _, cfg := range cfgs {
@@ -80,14 +89,14 @@ func withDatabaseLoginRepository(userService types.IUserService) LoginServiceCon
 
 func (loginService *LoginService) CheckLogin(login *types.Login) (*types.User, error) {
 	user := &types.User{}
-	user, errUser := loginService.ViewByEmail(login.Email, user)
+	user, errUser := loginService.ViewVerifiedUserByEmail(login.Email, user)
 
 	if errUser != nil {
 		return nil, errUser
-	} else if !user.EmailVerified {
+	} else if !user.IsVerified {
 		return user, errors.New(`Your account is not verified check your mail for verification link`)
 	}
-	match, _ := loginService.Hash.Match(login.Password, user.Password)
+	match, _ := pkg.DefaultPassword.Match(login.Password, user.Password)
 	if !match {
 		return nil, errors.New("invalid Username or Password")
 	}
