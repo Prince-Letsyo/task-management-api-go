@@ -1,8 +1,10 @@
+// Package model jhd
 package model
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
@@ -50,7 +52,6 @@ func (u *User) AfterCreate(tx *gorm.DB) error {
 
 func (u *User) validateAndHashPassword(ctx context.Context) error {
 	plainPassword := u.Password
-
 	if strings.TrimSpace(plainPassword) == "" {
 		return errors.New("password cannot be empty")
 	}
@@ -65,8 +66,8 @@ func (u *User) validateAndHashPassword(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("hashedPassword: %v\n", hashedPassword)
 
 	u.Password = hashedPassword
-
 	return nil
 }

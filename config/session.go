@@ -36,7 +36,6 @@ func (s *SessionConfig) Setup() error {
 
 	s.Store = session.New(session.Config{
 		Storage:        provider,
-		KeyLookup:      "cookie:" + s.Name,
 		CookiePath:     s.CookiePath,
 		CookieDomain:   s.CookieDomain,
 		CookieSecure:   s.CookieSecure,

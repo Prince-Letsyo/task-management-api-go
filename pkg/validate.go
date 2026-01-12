@@ -2,76 +2,107 @@
 package pkg
 
 import (
-	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 )
 
+// 1. Define the structured error format
+type ErrorResponse struct {
+	Field   string `json:"field"`
+	Tag     string `json:"tag"`
+	Message string `json:"message"`
+}
+
+// 2. Initialize Validator with JSON tag support
 type Validateinstance struct {
 	Vi *validator.Validate
 }
 
-var VI Validateinstance = Validateinstance{
-	Vi: validator.New(validator.WithRequiredStructEnabled()),
+var VI = Validateinstance{
+	Vi: func() *validator.Validate {
+		v := validator.New(validator.WithRequiredStructEnabled())
+
+		// Returns the name from the json:"" tag instead of the Struct field name
+		v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+			if name == "-" {
+				return ""
+			}
+			return name
+		})
+
+		return v
+	}(),
 }
 
-type validationError struct {
-	Namespace       string `json:"namespace"` // can differ when a custom TagNameFunc is registered or
-	Field           string `json:"field"`     // by passing alt name to ReportError like below
-	StructNamespace string `json:"structNamespace"`
-	StructField     string `json:"structField"`
-	Tag             string `json:"tag"`
-	ActualTag       string `json:"actualTag"`
-	Kind            string `json:"kind"`
-	Type            string `json:"type"`
-	Value           string `json:"value"`
-	Param           string `json:"param"`
-	Message         string `json:"message"`
-}
+// 3. Logic to translate validation errors into your slice format
+func validateStruct(value interface{}) []ErrorResponse {
+	var errors []ErrorResponse
+	err := VI.Vi.Struct(value)
+	if err != nil {
+		for _, err := range err.(validator.ValidationErrors) {
+			var msg string
 
-func validateStruct(value interface{}) error {
-	if validErr := VI.Vi.Struct(value); validErr != nil {
-		for _, err := range validErr.(validator.ValidationErrors) {
-			e := validationError{
-				Namespace:       err.Namespace(),
-				Field:           err.Field(),
-				StructNamespace: err.StructNamespace(),
-				StructField:     err.StructField(),
-				Tag:             err.Tag(),
-				ActualTag:       err.ActualTag(),
-				Kind:            fmt.Sprintf("%v", err.Kind()),
-				Type:            fmt.Sprintf("%v", err.Type()),
-				Value:           fmt.Sprintf("%v", err.Value()),
-				Param:           err.Param(),
-				Message:         err.Error(),
+			// Custom message mapping based on the tag
+			switch err.Tag() {
+			case "required":
+				msg = fmt.Sprintf("%s is required", err.Field())
+			case "email":
+				msg = fmt.Sprintf("%s must be a valid email address", err.Field())
+			case "min":
+				msg = fmt.Sprintf("%s must be at least %s characters", err.Field(), err.Param())
+			case "unique":
+				msg = fmt.Sprintf("%s is already in use", err.Field())
+			default:
+				msg = fmt.Sprintf("field %s failed validation on %s", err.Field(), err.Tag())
 			}
 
-			indent, err := json.MarshalIndent(e, "", "  ")
-			if err != nil {
-				fmt.Println(err)
-				panic(err)
-			}
-
-			fmt.Println(string(indent))
-
+			errors = append(errors, ErrorResponse{
+				Field:   err.Field(),
+				Tag:     err.Tag(),
+				Message: msg,
+			})
 		}
-		return validErr
 	}
+	return errors
+}
+
+// 4. Fiber Custom Handlers
+func CustomBodyParser(c *fiber.Ctx, value interface{}) error {
+	// Parse the JSON body
+	if err := c.BodyParser(value); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Failed to parse request body",
+		})
+	}
+	fmt.Println("Parsed body:", value)
+	// Validate the struct
+	if errs := validateStruct(value); len(errs) > 0 {
+		fmt.Println("Validation errors:", errs)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"errors": errs,
+		})
+	}
+
 	return nil
 }
 
 func CustomQueryParser(c *fiber.Ctx, value interface{}) error {
 	if err := c.QueryParser(value); err != nil {
-		return err
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Failed to parse query parameters",
+		})
 	}
-	return validateStruct(value)
-}
 
-func CustomBodyParser(c *fiber.Ctx, value any) error {
-	if err := c.BodyParser(value); err != nil {
-		return err
+	if errs := validateStruct(value); len(errs) > 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"errors": errs,
+		})
 	}
-	return validateStruct(value)
+
+	return nil
 }

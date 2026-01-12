@@ -40,7 +40,8 @@ func (registerService *RegisterService) NewUser(register *types.RegisterForm) (*
 		UserName:  register.UserName,
 		Password:  register.Password,
 	}
-	if user, _ = registerService.ViewByEmail(user.Email, user); user != nil {
+	checkUser := *user
+	if user, _ := registerService.ViewByEmail(checkUser.Email, &checkUser); user != nil {
 		return nil, errors.New("user already exists")
 	}
 	if _, err := registerService.Save(user); err != nil {
@@ -50,10 +51,8 @@ func (registerService *RegisterService) NewUser(register *types.RegisterForm) (*
 }
 
 func (registerService *RegisterService) ModifyUserPassword(id uint, passwordReset *types.PasswordResetForm) (*types.User, error) {
-	user := &types.User{
-		Password: passwordReset.Password,
-	}
-	if _, err := registerService.Modify(id, user); err != nil {
+	user, err := registerService.Modify(id, map[string]interface{}{"password": passwordReset.Password})
+	if err != nil {
 		return nil, err
 	}
 	return user, nil

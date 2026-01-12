@@ -5,66 +5,96 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 )
 
-func Encrypt(stringToEncrypt string, keyString string) (encryptedString string) {
-	// Since the key is in string, we need to convert decode it to bytes
-	key, _ := hex.DecodeString(keyString)
-	plaintext := []byte(stringToEncrypt)
-
-	// Create a new Cipher Block from the key
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// Create a new GCM - https://en.wikipedia.org/wiki/Galois/Counter_Mode
-	// https://golang.org/pkg/crypto/cipher/#NewGCM
-	aesGCM, err := cipher.NewGCM(block)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// Create a nonce. Nonce should be from GCM
-	nonce := make([]byte, aesGCM.NonceSize())
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		panic(err.Error())
-	}
-
-	// Encrypt the data using aesGCM.Seal
-	// Since we don't want to save the nonce somewhere else in this case, we add it as a prefix to the encrypted data. The first nonce argument in Seal is the prefix.
-	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, nil)
-	return fmt.Sprintf("%x", ciphertext)
+type TokenData struct {
+	Payload   string `json:"p"`   // the original data you want to protect (e.g. user ID, email, etc.)
+	ExpiresAt int64  `json:"exp"` // Unix timestamp when it expires
 }
 
-func Decrypt(encryptedString string, keyString string) (decryptedString string) {
-	key, _ := hex.DecodeString(keyString)
-	enc, _ := hex.DecodeString(encryptedString)
+// Encrypt creates a time-limited encrypted token that expires in the given duration (e.g. 15 * time.Minute)
+func Encrypt(payload string, keyString string, validity time.Duration) (encryptedString string, err error) {
+	key, err := hex.DecodeString(keyString)
+	if err != nil {
+		return "", fmt.Errorf("invalid key hex: %w", err)
+	}
 
-	// Create a new Cipher Block from the key
+	data := TokenData{
+		Payload:   payload,
+		ExpiresAt: time.Now().Add(validity).Unix(),
+	}
+
+	plaintext, err := json.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("json marshal failed: %w", err)
+	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 
-	// Create a new GCM
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 
-	// Get the nonce size
-	nonceSize := aesGCM.NonceSize()
+	nonce := make([]byte, aesGCM.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
 
-	// Extract the nonce from the encrypted data
+	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, nil)
+	return fmt.Sprintf("%x", ciphertext), nil
+}
+
+// Decrypt decrypts the token and checks if it has expired.
+// Returns the original payload if valid, otherwise an error.
+func Decrypt(encryptedString string, keyString string) (payload string, err error) {
+	key, err := hex.DecodeString(keyString)
+	if err != nil {
+		return "", fmt.Errorf("invalid key hex: %w", err)
+	}
+
+	enc, err := hex.DecodeString(encryptedString)
+	if err != nil {
+		return "", fmt.Errorf("invalid encrypted hex: %w", err)
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonceSize := aesGCM.NonceSize()
+	if len(enc) < nonceSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+
 	nonce, ciphertext := enc[:nonceSize], enc[nonceSize:]
 
-	// Decrypt the data
 	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		panic(err.Error())
+		return "", fmt.Errorf("decryption failed (possibly tampered or wrong key): %w", err)
 	}
-	return string(plaintext)
+
+	var data TokenData
+	if err := json.Unmarshal(plaintext, &data); err != nil {
+		return "", fmt.Errorf("invalid payload format: %w", err)
+	}
+
+	if time.Now().Unix() > data.ExpiresAt {
+		return "", fmt.Errorf("token has expired")
+	}
+
+	return data.Payload, nil
 }

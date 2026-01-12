@@ -16,7 +16,7 @@ type IUserRepository interface {
 	retrieveByEmail(email string, user *types.User) (*types.User, error)
 	retrieveVerifiedUserByEmail(email string, user *types.User) (*types.User, error)
 	retrievePage(filters *types.UserFilters) (*types.UserPage, error)
-	update(id uint, user *types.User) (*types.User, error)
+	update(id uint, updatedValues map[string]interface{}) (*types.User, error)
 }
 
 type DBUserRepository struct {
@@ -103,7 +103,7 @@ func (dbUserRepository *DBUserRepository) retrieveByID(id uint, user *types.User
 }
 
 func (dbUserRepository *DBUserRepository) retrieveByEmail(email string, user *types.User) (*types.User, error) {
-	var userModel *model.User
+	userModel := &model.User{}
 	if err := dbUserRepository.Database.Where(&model.User{Email: email}).
 		Preload("Profile").
 		First(userModel); err.Error != nil {
@@ -121,11 +121,11 @@ func (dbUserRepository *DBUserRepository) retrieveByEmail(email string, user *ty
 }
 
 func (dbUserRepository *DBUserRepository) retrieveVerifiedUserByEmail(email string, user *types.User) (*types.User, error) {
-	var userModel *model.User
+	userModel := &model.User{}
 	if err := dbUserRepository.Database.
 		Where(&model.User{Email: email, IsVerified: true}).
 		Preload("Profile").
-		First(&userModel); err.Error != nil {
+		First(userModel); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
@@ -139,13 +139,13 @@ func (dbUserRepository *DBUserRepository) retrieveVerifiedUserByEmail(email stri
 }
 
 func (dbUserRepository *DBUserRepository) retrievePage(filters *types.UserFilters) (*types.UserPage, error) {
-	var userModels []model.User
+	userModels := []model.User{}
 
 	if err := dbUserRepository.Database.
 		Preload("Profile").
 		Model(&model.User{}).
-		Scopes(dbUserRepository.Database.Paginate(&filters.Filters)).
-		Find(&userModels); err.Error != nil {
+		Scopes(dbUserRepository.Database.Paginate(filters.Filters)).
+		Find(userModels); err.Error != nil {
 		return nil, err.Error
 	}
 	users := make([]types.User, len(userModels))
@@ -160,28 +160,26 @@ func (dbUserRepository *DBUserRepository) retrievePage(filters *types.UserFilter
 				Offset: filters.Offset,
 				Total:  filters.Total,
 			},
-			Metadata: map[string]interface{}{"description": "filtered page of users"},
+			Metadata: map[string]any{"description": "filtered page of users"},
 		},
 		Data: &users,
 	}, nil
 }
 
-func (dbUserRepository *DBUserRepository) update(id uint, user *types.User) (*types.User, error) {
-	var userModel *model.User
+func (dbUserRepository *DBUserRepository) update(id uint, updatedValues map[string]interface{}) (user *types.User, err error) {
+	userModel := &model.User{}
 	if err := dbUserRepository.Database.Model(&model.User{}).
 		Preload("Profile").
 		Where("id = ? ", id).
-		Updates(userModel); err.Error != nil {
+		Updates(updatedValues).First(userModel); err.Error != nil {
 
 		if errors.Is(err.Error, gorm.ErrInvalidDB) {
 			return nil, pkg.ErrBookNotFound
 		}
 		return nil, errors.Wrap(err.Error, "cannot update user")
 	}
-	converted := dbUserRepository.modelType(userModel)
-	if user != nil {
-		*user = *converted
-	}
+	user = dbUserRepository.modelType(userModel)
+
 	return user, nil
 }
 

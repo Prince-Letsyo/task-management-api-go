@@ -153,7 +153,13 @@ func (s *ServerConfig) ServeWithGraceFullShutdown(cfg *AppCfg, addr ...string) e
 	) // When an interrupt is sent, notify the channel
 	<-c // This blocks the main thread until an interrupt is received
 	fmt.Println("I'm shutting down")
-	return s.Shutdown()
+	if err := s.Shutdown(); err != nil {
+		_ = cfg.Database.Close()
+		return err
+	} else {
+		_ = cfg.Database.Close()
+	}
+	return nil
 }
 
 func (s *ServerConfig) startupMessage(addr string, tls bool, processIds string) {

@@ -2,6 +2,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -91,14 +92,15 @@ func (adapter *accountAdapterService) getAccountSession(duration time.Duration, 
 	return adapter.adapterType.getAccountSession(duration, c, adapter.AppCfg)
 }
 
-func NewAccountAdapterService(adapterType IAdapterService) IAccountAdapterService {
+func NewAccountAdapterService(appCfg *config.AppCfg, adapterType IAdapterService) IAccountAdapterService {
 	return &accountAdapterService{
 		adapterType: adapterType,
+		AppCfg:      appCfg,
 	}
 }
 
 func GenerateConfirmURL(email string, baseURL string, appCfg *config.AppCfg) string {
-	token := pkg.Encrypt(email, appCfg.Server.Key)
+	token, _ := pkg.Encrypt(email, appCfg.Server.Key, 15*time.Minute)
 	uri := fmt.Sprintf("%s?t=%s", baseURL, token)
 	return uri
 }
@@ -113,14 +115,13 @@ func GenerateConfirmPath(context *fiber.Ctx, redirect string) string {
 }
 
 func GeneratePasswordResetURL(email string, baseURL string, appCfg *config.AppCfg) string {
-	token := pkg.Encrypt(email, appCfg.Server.Key)
+	token, _ := pkg.Encrypt(email, appCfg.Server.Key, 15*time.Minute)
 	uri := fmt.Sprintf("%s/?t=%s", baseURL, token)
 	return uri
 }
 
 type AccountAdapterService struct {
 	types.IUserService
-	*config.AppCfg
 }
 
 func (adapter AccountAdapterService) SendPasswordResetEmail(email string, baseURL string, appCfg *config.AppCfg) {
@@ -143,14 +144,24 @@ func (adapter AccountAdapterService) SendConfirmationEmail(email string, baseURL
 }
 
 func (adapter AccountAdapterService) UserClaims(c *fiber.Ctx, appCfg *config.AppCfg) (*config.UserClaims, error) {
+	fmt.Println("AccountAdapterService:UserClaims")
 	accessToken := c.Cookies("access-token")
+	fmt.Printf("AccountAdapterService::accessToken: %v", accessToken)
 	accessClaim := &config.UserClaims{}
 	if accessToken == "" {
+		fmt.Println("Session setting.")
 		sess, err := appCfg.Session.Get(c)
+		fmt.Println("Session got.")
+		fmt.Printf("AccountAdapterService::Session err: %v ", err)
 		if err != nil {
-			return accessClaim, err
+			return nil, err
 		}
-		accessToken = sess.Get("access-token").(string)
+		if t := sess.Get("access-token"); t == nil {
+			return accessClaim, errors.New("not loggedIn")
+		} else {
+			accessToken = t.(string)
+			fmt.Printf("AccountAdapterService::Session accessToken: %v\n", accessToken)
+		}
 	}
 	accessClaim, err := appCfg.JwtSecrets.ParseAccessToken(accessToken)
 	if err != nil {
@@ -160,7 +171,9 @@ func (adapter AccountAdapterService) UserClaims(c *fiber.Ctx, appCfg *config.App
 }
 
 func (adapter AccountAdapterService) User(c *fiber.Ctx, appCfg *config.AppCfg) (*types.User, error) {
+	fmt.Println("AccountAdapterService:User")
 	userClaims, err := adapter.UserClaims(c, appCfg)
+	fmt.Printf("AccountAdapterService::userClaims: %v", userClaims)
 	if err != nil {
 		return &types.User{}, err
 	}
@@ -179,7 +192,7 @@ func (adapter AccountAdapterService) UserID(c *fiber.Ctx, appCfg *config.AppCfg)
 	}
 	id, err := strconv.Atoi(accessClaim.ID)
 	if err != nil {
-		return 0, err
+		return 1, err
 	}
 	return uint(id), nil
 }
@@ -220,7 +233,7 @@ func (adapter AccountAdapterService) IsLoggedIn(context *fiber.Ctx, appCfg *conf
 func (adapter AccountAdapterService) AccessTokenCreate(context *fiber.Ctx, user *types.User, appCfg *config.AppCfg) error {
 	accessClaims := config.NewUserClaims(
 		*user,
-		appCfg.JwtSecrets.GetAPIAccessExpireDuration(),
+		appCfg.JwtSecrets.AccessExpire,
 	)
 	accesstoken, err := appCfg.JwtSecrets.NewAccessToken(accessClaims)
 	if err != nil {
@@ -256,7 +269,7 @@ func (adapter AccountAdapterService) AccessTokenCreate(context *fiber.Ctx, user 
 func (adapter AccountAdapterService) RefreshTokenCreate(context *fiber.Ctx, user *types.User, appCfg *config.AppCfg) error {
 	refreshClaims := config.NewUserClaims(
 		*user,
-		appCfg.JwtSecrets.GetAPIRefreshExpireDuration(),
+		appCfg.JwtSecrets.RefreshExpire,
 	)
 	refreshtoken, err := appCfg.JwtSecrets.NewRefreshToken(refreshClaims)
 	if err != nil {

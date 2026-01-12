@@ -28,5 +28,16 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+
+.app.config.dev.yaml
+build
+coverage.html
+cover.out
+tmp
+vendor
+storage/*
+uploads/*
+assets/*
+public/js

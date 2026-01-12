@@ -2,6 +2,8 @@
 package middleware
 
 import (
+	"fmt"
+
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/service"
@@ -41,13 +43,16 @@ type LoginMiddleWare struct {
 }
 
 func (loginMiddleWare LoginMiddleWare) RedirectLogin(c *fiber.Ctx, appCfg *config.AppCfg) error {
+	fmt.Println("RedirectLogin")
 	redirectService := service.NewAccountAdapterService(
+		appCfg,
 		service.AccountAdapterService{
 			IUserService: loginMiddleWare.IUserService,
-			AppCfg:       appCfg,
 		},
 	)
+	fmt.Printf("redirectService: %v", redirectService)
 	user, err := redirectService.User(c)
+	fmt.Printf("RedirectToHomePageOnLogin::user: %v", user)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(
 			fiber.Map{

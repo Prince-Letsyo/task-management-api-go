@@ -27,7 +27,7 @@ func LoadAuthRoutes(router fiber.Router, appCfg *config.AppCfg) {
 		panic(err.Error())
 	}
 
-	if _, err := newHTTPController(
+	if _, err := newHTTPAuthController(
 		withAuthController(
 			Auth{
 				router:          router.Group("/auth/"),

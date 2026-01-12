@@ -1,9 +1,10 @@
 package middleware
 
 import (
+	"fmt"
+
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/service"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/gofiber/fiber/v2"
 )
@@ -25,9 +26,23 @@ type registerMiddleWare struct {
 	*config.AppCfg
 }
 
+type TokenForm struct {
+	T string `json:"t"`
+}
+
 func (middleWare *registerMiddleWare) ValidateConfirmToken(c *fiber.Ctx) error {
 	user := &types.User{}
-	t := pkg.Decrypt(c.Query("t"), middleWare.Server.Key)
+	tokenF := &TokenForm{}
+	tErr := pkg.CustomQueryParser(c, tokenF)
+	if tErr != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			fiber.Map{"error": tErr.Error()})
+	}
+	t, err := pkg.Decrypt(tokenF.T, middleWare.Server.Key)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			fiber.Map{"error": err.Error()})
+	}
 	return middleWare.registerType.ValidateToken(c, t, user, middleWare.AppCfg)
 }
 
@@ -43,12 +58,9 @@ type RegisterMiddleWare struct {
 
 func (registerMiddleWare RegisterMiddleWare) Validate(context *fiber.Ctx, register *types.RegisterForm) error {
 	if err := pkg.CustomBodyParser(context, register); err != nil {
-		return context.Status(fiber.StatusBadRequest).JSON(
-			fiber.Map{
-				"error":   err.Error(),
-				"message": "Validation Error",
-			},
-		)
+		return err
+	} else {
+		fmt.Printf("Error: %v", err)
 	}
 	r, errRegister := registerMiddleWare.NewUser(register)
 	if errRegister != nil {
@@ -69,7 +81,6 @@ func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t strin
 			"message": "Error on token verification request",
 		})
 	}
-
 	if user.IsVerified {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error":   "Email was already validated",
@@ -77,8 +88,9 @@ func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t strin
 		})
 	}
 
-	user.IsVerified = true
-	vUser, err := registerMiddleWare.Modify(user.ID, user)
+	vUser, err := registerMiddleWare.Modify(
+		user.ID,
+		map[string]interface{}{"email_verified": true})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   err.Error(),
@@ -86,20 +98,6 @@ func (registerMiddleWare RegisterMiddleWare) ValidateToken(c *fiber.Ctx, t strin
 		})
 	}
 
-	errToken := service.
-		NewAccountAdapterService(
-			service.AccountAdapterService{
-				IUserService: registerMiddleWare.IUserService,
-				AppCfg:       appCfg,
-			},
-		).
-		Login(c, vUser)
-	if errToken != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   errToken.Error(),
-			"message": "Error on token verification request",
-		})
-	}
 	c.Locals("user", vUser)
 	return c.Next()
 }

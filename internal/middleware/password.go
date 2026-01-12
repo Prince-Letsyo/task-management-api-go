@@ -114,7 +114,10 @@ func (middleWare *passwordResetMiddleWare) ValidatePasswordResetData(c *fiber.Ct
 }
 
 func _validatePasswordReset(c *fiber.Ctx, appCfg *config.AppCfg, t string) error {
-	t = pkg.Decrypt(t, appCfg.Server.Key)
+	t, err := pkg.Decrypt(t, appCfg.Server.Key)
+	if err != nil {
+		return errors.New("invalid password reset token")
+	}
 	emailParts := strings.Split(t, "-reset-")
 
 	if len(emailParts) != 2 {

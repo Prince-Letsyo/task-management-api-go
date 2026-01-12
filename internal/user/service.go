@@ -51,8 +51,8 @@ func (us *UserService) List(filters *types.UserFilters) (*types.UserPage, error)
 	return p, nil
 }
 
-func (us *UserService) Modify(id uint, user *types.User) (*types.User, error) {
-	b, err := us.update(id, user)
+func (us *UserService) Modify(id uint, updatedValues map[string]interface{}) (*types.User, error) {
+	b, err := us.update(id, updatedValues)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot update user")
 	}

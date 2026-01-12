@@ -18,7 +18,7 @@ type User struct {
 }
 
 type UserFilters struct {
-	pkg.Filters
+	*pkg.Filters
 	Name        string `json:"name" query:"name"`
 	Description string `json:"description" query:"description"`
 }
@@ -34,5 +34,5 @@ type IUserService interface {
 	ViewByEmail(email string, user *User) (*User, error)
 	ViewVerifiedUserByEmail(email string, user *User) (*User, error)
 	List(filters *UserFilters) (*UserPage, error)
-	Modify(id uint, user *User) (*User, error)
+	Modify(id uint, updatedValues map[string]interface{}) (*User, error)
 }

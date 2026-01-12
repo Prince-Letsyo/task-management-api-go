@@ -14,6 +14,20 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+type IAuthController interface {
+	login() fiber.Handler
+	logout() fiber.Handler
+	register() fiber.Handler
+	verifyRegisteredEmail() fiber.Handler
+	resendConfirmEmail() fiber.Handler
+	passwordResetComfirm() fiber.Handler
+	passwordResetComplete() fiber.Handler
+	passwordReset() fiber.Handler
+	requestPasswordReset() fiber.Handler
+	createNewAccessToken() fiber.Handler
+	verifyToken() fiber.Handler
+}
+
 type Auth struct {
 	router          fiber.Router
 	userService     types.IUserService
@@ -47,12 +61,12 @@ type authController struct {
 
 func (controller *authController) register() fiber.Handler {
 	return func(context *fiber.Ctx) error {
-		register := context.Locals("register").(*types.RegisterForm)
+		register := context.Locals("register").(*types.User)
 
-		go service.NewAccountAdapterService(service.AccountAdapterService{
-			IUserService: controller.userService,
-			AppCfg:       controller.AppCfg,
-		}).SendConfirmationEmail(
+		go service.NewAccountAdapterService(
+			controller.AppCfg, service.AccountAdapterService{
+				IUserService: controller.userService,
+			}).SendConfirmationEmail(
 			register.Email,
 			service.GenerateConfirmPath(context, controller.Server.Redirect),
 		)
@@ -76,9 +90,9 @@ func (controller *authController) verifyRegisteredEmail() fiber.Handler {
 func (controller *authController) resendConfirmEmail() fiber.Handler {
 	return func(context *fiber.Ctx) error {
 		accountAdapter := service.NewAccountAdapterService(
+			controller.AppCfg,
 			service.AccountAdapterService{
 				IUserService: controller.userService,
-				AppCfg:       controller.AppCfg,
 			})
 		user := context.Locals("user").(*types.User)
 
@@ -135,10 +149,11 @@ func (controller *authController) requestPasswordReset() fiber.Handler {
 		} else {
 			rediect = fmt.Sprintf("%s/auth/reset-password", rediect)
 		}
-		go service.NewAccountAdapterService(service.AccountAdapterService{
-			IUserService: controller.userService,
-			AppCfg:       controller.AppCfg,
-		}).SendPasswordResetEmail(
+		go service.NewAccountAdapterService(
+			controller.AppCfg,
+			service.AccountAdapterService{
+				IUserService: controller.userService,
+			}).SendPasswordResetEmail(
 			user.Email,
 			rediect,
 		)
@@ -180,10 +195,11 @@ func (controller *authController) login() fiber.Handler {
 		data := fiber.Map{}
 
 		errToken := service.
-			NewAccountAdapterService(service.AccountAdapterService{
-				IUserService: controller.userService,
-				AppCfg:       controller.AppCfg,
-			}).
+			NewAccountAdapterService(
+				controller.AppCfg,
+				service.AccountAdapterService{
+					IUserService: controller.userService,
+						}).
 			Login(context, user) //nolint:wsl
 
 		if errToken != nil && !ok {
@@ -250,9 +266,9 @@ func (controller *authController) logout() fiber.Handler {
 		data := fiber.Map{}
 
 		err := service.NewAccountAdapterService(
+			controller.AppCfg,
 			service.AccountAdapterService{
 				IUserService: controller.userService,
-				AppCfg:       controller.AppCfg,
 			}).Logout(context)
 		if err != nil {
 			data["error"] = err.Error()
@@ -287,10 +303,11 @@ func (controller *authController) createNewAccessToken() fiber.Handler {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusInternalServerError).JSON(data)
 		}
-		accountService := service.NewAccountAdapterService(service.AccountAdapterService{
-			IUserService: controller.userService,
-			AppCfg:       controller.AppCfg,
-		})
+		accountService := service.NewAccountAdapterService(
+			controller.AppCfg,
+			service.AccountAdapterService{
+				IUserService: controller.userService,
+			})
 
 		err = accountService.AccessTokenCreate(context, user)
 		if err != nil {
@@ -368,7 +385,6 @@ func newAuthController(
 		}, appCfg)
 	controller.router.Post(
 		"register",
-		loginMiddleWare.RedirectToHomePageOnLogin,
 		registerMiddleWare.ValidateRegister,
 		controller.register(),
 	)
