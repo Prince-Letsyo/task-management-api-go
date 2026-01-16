@@ -110,12 +110,17 @@ func (controller *authController) resendConfirmEmail() fiber.Handler {
 func (controller *authController) requestPasswordReset() fiber.Handler {
 	return func(context *fiber.Ctx) error {
 		requestPasswordReset := &types.RequestPasswordResetForm{}
-		if errForm := pkg.CustomBodyParser(context, requestPasswordReset); errForm != nil {
-			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error":   errForm.Error(),
-				"message": "Error on request password reset request",
+		if err := context.BodyParser(requestPasswordReset); err != nil {
+			return context.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+				"error": "failed parsinng request  body",
 			})
 		}
+		if errs := pkg.ValidateStruct(requestPasswordReset); len(errs) > 0 {
+			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"errors": errs,
+			})
+		}
+
 		if validErr := pkg.VI.Vi.Struct(requestPasswordReset); validErr != nil {
 			errorsfield := make(map[string][]string)
 			pass := reflect.TypeOf(types.RequestPasswordResetForm{})
@@ -284,9 +289,13 @@ func (controller *authController) createNewAccessToken() fiber.Handler {
 		refreshTokenRes := &RefreshtokenRes{}
 		data := fiber.Map{}
 
-		if err := pkg.CustomBodyParser(context, refreshTokenRes); err != nil {
-			data["error"] = err.Error()
+		if err := context.BodyParser(refreshTokenRes); err != nil {
+			data["error"] = "failed parsinng request body"
 			return context.Status(fiber.StatusUnprocessableEntity).JSON(data)
+		}
+		if errs := pkg.ValidateStruct(refreshTokenRes); len(errs) > 0 {
+			data["errors"] = errs
+			return context.Status(fiber.StatusBadRequest).JSON(data)
 		}
 		refreshTokenClaim, err := controller.JwtSecrets.ParseRefreshToken(refreshTokenRes.RefreshToken)
 		if err != nil {
@@ -340,8 +349,12 @@ func (controller *authController) verifyToken() fiber.Handler {
 		token := &Token{}
 		data := fiber.Map{}
 
-		if err := pkg.CustomBodyParser(context, token); err != nil {
-			data["error"] = err.Error()
+		if err := context.BodyParser(token); err != nil {
+			data["error"] = "failed parsinng request body"
+			return context.Status(fiber.StatusBadRequest).JSON(data)
+		}
+		if errs := pkg.ValidateStruct(token); len(errs) > 0 {
+			data["errors"] = errs
 			return context.Status(fiber.StatusBadRequest).JSON(data)
 		}
 		accessToken, err := controller.JwtSecrets.ParseAccessToken(token.Token)

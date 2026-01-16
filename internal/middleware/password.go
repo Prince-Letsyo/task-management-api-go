@@ -50,10 +50,14 @@ func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetEmailTo
 
 func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetToken(c *fiber.Ctx, appCfg *config.AppCfg) error {
 	token := &types.PasswordResetTokenForm{}
-	if err := pkg.CustomBodyParser(c, token); err != nil {
+	if err := c.BodyParser(token); err != nil {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+			"error": "failed parsing request body",
+		})
+	}
+	if errs := pkg.ValidateStruct(token); len(errs) > 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":   err.Error(),
-			"message": "Validation error",
+			"errors": errs,
 		})
 	}
 	err := _validatePasswordReset(c, appCfg, token.Token)
@@ -68,10 +72,14 @@ func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetToken(c
 }
 
 func (passwordResetMiddleWare PasswordResetMiddleWare) CheckPasswordResetData(c *fiber.Ctx, appCfg *config.AppCfg, passwordReset *types.PasswordResetForm) error {
-	if err := pkg.CustomBodyParser(c, passwordReset); err != nil {
+	if err := c.BodyParser(passwordReset); err != nil {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+			"error": "failed parsing request body",
+		})
+	}
+	if errs := pkg.ValidateStruct(passwordReset); len(errs) > 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":   err.Error(),
-			"message": "Validation error",
+			"errors": errs,
 		})
 	}
 	if err := _validatePasswordReset(c, appCfg, passwordReset.Token); err != nil {

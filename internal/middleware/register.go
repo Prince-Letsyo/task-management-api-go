@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"fmt"
-
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
@@ -33,10 +31,13 @@ type TokenForm struct {
 func (middleWare *registerMiddleWare) ValidateConfirmToken(c *fiber.Ctx) error {
 	user := &types.User{}
 	tokenF := &TokenForm{}
-	tErr := pkg.CustomQueryParser(c, tokenF)
+	tErr := c.QueryParser(tokenF)
 	if tErr != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(
-			fiber.Map{"error": tErr.Error()})
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(
+			fiber.Map{"error": "failed parsing request body"})
+	}
+	if errs := pkg.ValidateStruct(tokenF); len(errs) > 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 	}
 	t, err := pkg.Decrypt(tokenF.T, middleWare.Server.Key)
 	if err != nil {
@@ -57,10 +58,16 @@ type RegisterMiddleWare struct {
 }
 
 func (registerMiddleWare RegisterMiddleWare) Validate(context *fiber.Ctx, register *types.RegisterForm) error {
-	if err := pkg.CustomBodyParser(context, register); err != nil {
-		return err
-	} else {
-		fmt.Printf("Error: %v", err)
+	if err := context.BodyParser(register); err != nil {
+		return context.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+			"error": "failed parsing request body",
+		})
+	}
+	if errs := pkg.ValidateStruct(register); len(errs) > 0 {
+		return context.Status(fiber.StatusBadRequest).JSON(
+			fiber.Map{
+				"errors": errs,
+			})
 	}
 	r, errRegister := registerMiddleWare.NewUser(register)
 	if errRegister != nil {

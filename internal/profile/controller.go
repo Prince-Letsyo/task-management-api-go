@@ -53,11 +53,14 @@ func (controller *profileController) updateProfile() fiber.Handler {
 	return func(context *fiber.Ctx) error {
 		data := fiber.Map{}
 		profileBody := &types.ProfileForm{}
-		if err := pkg.CustomBodyParser(context, profileBody); err != nil {
-			data["error"] = err.Error()
+		if err := context.BodyParser(profileBody); err != nil {
+			data["error"] = "failed parsing request body"
+			return context.Status(fiber.StatusUnprocessableEntity).JSON(data)
+		}
+		if errs := pkg.ValidateStruct(profileBody); len(errs) > 0 {
+			data["errors"] = errs
 			return context.Status(fiber.StatusBadRequest).JSON(data)
 		}
-
 		userID, err := service.NewAccountAdapterService(
 			controller.AppCfg,
 			service.AccountAdapterService{

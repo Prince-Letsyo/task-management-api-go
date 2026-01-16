@@ -66,10 +66,14 @@ func (loginMiddleWare LoginMiddleWare) RedirectLogin(c *fiber.Ctx, appCfg *confi
 }
 
 func (loginMiddleWare LoginMiddleWare) Validate(c *fiber.Ctx, login *types.Login) error {
-	if err := pkg.CustomBodyParser(c, login); err != nil {
+	if err := c.BodyParser(login); err != nil {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+			"error": "failed parsinng request body",
+		})
+	}
+	if errs := pkg.ValidateStruct(login); len(errs) > 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":   err.Error(),
-			"message": "Error on validation",
+			"errors": errs,
 		})
 	}
 

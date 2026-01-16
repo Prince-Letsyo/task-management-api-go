@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/gofiber/fiber/v2"
 )
 
 // 1. Define the structured error format
@@ -39,8 +38,7 @@ var VI = Validateinstance{
 	}(),
 }
 
-// 3. Logic to translate validation errors into your slice format
-func validateStruct(value interface{}) []ErrorResponse {
+func ValidateStruct(value interface{}) []ErrorResponse {
 	var errors []ErrorResponse
 	err := VI.Vi.Struct(value)
 	if err != nil {
@@ -69,40 +67,4 @@ func validateStruct(value interface{}) []ErrorResponse {
 		}
 	}
 	return errors
-}
-
-// 4. Fiber Custom Handlers
-func CustomBodyParser(c *fiber.Ctx, value interface{}) error {
-	// Parse the JSON body
-	if err := c.BodyParser(value); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse request body",
-		})
-	}
-	fmt.Println("Parsed body:", value)
-	// Validate the struct
-	if errs := validateStruct(value); len(errs) > 0 {
-		fmt.Println("Validation errors:", errs)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"errors": errs,
-		})
-	}
-
-	return nil
-}
-
-func CustomQueryParser(c *fiber.Ctx, value interface{}) error {
-	if err := c.QueryParser(value); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse query parameters",
-		})
-	}
-
-	if errs := validateStruct(value); len(errs) > 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"errors": errs,
-		})
-	}
-
-	return nil
 }
