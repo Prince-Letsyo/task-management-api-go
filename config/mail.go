@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -26,6 +27,9 @@ type Mail struct {
 func (m *Mail) Send(to string, subject string, body string, cc string, from string) error {
 	if m.SMTPServer == nil {
 		m.SetupMailer()
+	}
+	if m.SMTPClient == nil {
+		return fmt.Errorf("SMTP client not initialized, check mail configuration and connection")
 	}
 	// New email simple html with inline and CC
 	email := mail.NewMSG()
@@ -66,10 +70,15 @@ func (m *Mail) SetupMailer() {
 	m.SMTPServer.Port = m.Port
 	m.SMTPServer.Username = m.Username
 	m.SMTPServer.Password = m.Password
-	if m.Encryption == "tls" {
-		m.SMTPServer.Encryption = mail.EncryptionTLS
-	} else {
+	switch m.Encryption {
+	case "tls":
+		m.SMTPServer.Encryption = mail.EncryptionSSLTLS
+	case "ssl":
 		m.SMTPServer.Encryption = mail.EncryptionSSL
+	case "starttls":
+		m.SMTPServer.Encryption = mail.EncryptionTLS
+	default:
+		m.SMTPServer.Encryption = mail.EncryptionNone
 	}
 
 	// Variable to keep alive connection
@@ -82,6 +91,6 @@ func (m *Mail) SetupMailer() {
 	m.SMTPServer.SendTimeout = 10 * time.Second
 	m.SMTPClient, err = m.Connect()
 	if err != nil {
-		log.Print(err)
+		log.Printf("Mail Connection Error: %v", err)
 	}
 }

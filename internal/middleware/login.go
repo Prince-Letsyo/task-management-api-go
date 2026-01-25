@@ -4,11 +4,12 @@ package middleware
 import (
 	"fmt"
 
-	"github.com/Prince-Letsyo/task-management-api-go/config"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/service"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/service"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
 
 type (
@@ -44,11 +45,9 @@ type LoginMiddleWare struct {
 
 func (loginMiddleWare LoginMiddleWare) RedirectLogin(c *fiber.Ctx, appCfg *config.AppCfg) error {
 	fmt.Println("RedirectLogin")
-	redirectService := service.NewAccountAdapterService(
+	redirectService := service.NewAccountService(
 		appCfg,
-		service.AccountAdapterService{
-			IUserService: loginMiddleWare.IUserService,
-		},
+		loginMiddleWare.IUserService,
 	)
 	fmt.Printf("redirectService: %v", redirectService)
 	user, err := redirectService.User(c)

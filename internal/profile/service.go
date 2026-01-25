@@ -2,7 +2,7 @@ package profile
 
 import (
 	"github.com/Prince-Letsyo/task-management-api-go/config"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
 )
 
 type ProfileService struct {

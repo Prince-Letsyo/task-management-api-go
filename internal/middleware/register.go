@@ -1,10 +1,11 @@
 package middleware
 
 import (
-	"github.com/Prince-Letsyo/task-management-api-go/config"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
 
 type (
@@ -39,7 +40,7 @@ func (middleWare *registerMiddleWare) ValidateConfirmToken(c *fiber.Ctx) error {
 	if errs := pkg.ValidateStruct(tokenF); len(errs) > 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 	}
-	t, err := pkg.Decrypt(tokenF.T, middleWare.Server.Key)
+	t, err := middleWare.Encryptor.Decrypt(tokenF.T)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(
 			fiber.Map{"error": err.Error()})

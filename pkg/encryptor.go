@@ -16,13 +16,20 @@ type TokenData struct {
 	ExpiresAt int64  `json:"exp"` // Unix timestamp when it expires
 }
 
-// Encrypt creates a time-limited encrypted token that expires in the given duration (e.g. 15 * time.Minute)
-func Encrypt(payload string, keyString string, validity time.Duration) (encryptedString string, err error) {
-	key, err := hex.DecodeString(keyString)
-	if err != nil {
-		return "", fmt.Errorf("invalid key hex: %w", err)
-	}
+type Encryptor struct {
+	key []byte
+}
 
+func NewEncryptor(keyHex string) (*Encryptor, error) {
+	key, err := hex.DecodeString(keyHex)
+	if err != nil {
+		return nil, fmt.Errorf("invalid key hex: %w", err)
+	}
+	return &Encryptor{key: key}, nil
+}
+
+// Encrypt creates a time-limited encrypted token that expires in the given duration (e.g. 15 * time.Minute)
+func (e *Encryptor) Encrypt(payload string, validity time.Duration) (encryptedString string, err error) {
 	data := TokenData{
 		Payload:   payload,
 		ExpiresAt: time.Now().Add(validity).Unix(),
@@ -33,7 +40,7 @@ func Encrypt(payload string, keyString string, validity time.Duration) (encrypte
 		return "", fmt.Errorf("json marshal failed: %w", err)
 	}
 
-	block, err := aes.NewCipher(key)
+	block, err := aes.NewCipher(e.key)
 	if err != nil {
 		return "", err
 	}
@@ -54,18 +61,13 @@ func Encrypt(payload string, keyString string, validity time.Duration) (encrypte
 
 // Decrypt decrypts the token and checks if it has expired.
 // Returns the original payload if valid, otherwise an error.
-func Decrypt(encryptedString string, keyString string) (payload string, err error) {
-	key, err := hex.DecodeString(keyString)
-	if err != nil {
-		return "", fmt.Errorf("invalid key hex: %w", err)
-	}
-
+func (e *Encryptor) Decrypt(encryptedString string) (payload string, err error) {
 	enc, err := hex.DecodeString(encryptedString)
 	if err != nil {
 		return "", fmt.Errorf("invalid encrypted hex: %w", err)
 	}
 
-	block, err := aes.NewCipher(key)
+	block, err := aes.NewCipher(e.key)
 	if err != nil {
 		return "", err
 	}

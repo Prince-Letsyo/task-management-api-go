@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/oarkflow/log"

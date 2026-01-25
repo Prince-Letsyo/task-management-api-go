@@ -4,8 +4,8 @@ package user
 import (
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/model"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/model"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )

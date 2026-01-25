@@ -2,12 +2,13 @@
 package profile
 
 import (
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/middleware"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/service"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/service"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
-	"github.com/gofiber/fiber/v2"
 )
 
 type IProfileController interface {
@@ -29,11 +30,10 @@ type profileController struct {
 func (controller *profileController) getProfile() fiber.Handler {
 	return func(context *fiber.Ctx) error {
 		data := fiber.Map{}
-		userID, err := service.NewAccountAdapterService(
+		userID, err := service.NewAccountService(
 			controller.AppCfg,
-			service.AccountAdapterService{
-				IUserService: controller.userService,
-			}).UserID(context)
+			controller.userService,
+		).UserID(context)
 		if err != nil {
 			data["error"] = "Unauthorized user"
 			return context.Status(fiber.StatusUnauthorized).JSON(data)
@@ -61,11 +61,10 @@ func (controller *profileController) updateProfile() fiber.Handler {
 			data["errors"] = errs
 			return context.Status(fiber.StatusBadRequest).JSON(data)
 		}
-		userID, err := service.NewAccountAdapterService(
+		userID, err := service.NewAccountService(
 			controller.AppCfg,
-			service.AccountAdapterService{
-				IUserService: controller.userService,
-			}).UserID(context)
+			controller.userService,
+		).UserID(context)
 		if err != nil {
 			data["error"] = "Unauthorized user"
 			return context.Status(fiber.StatusUnauthorized).JSON(data)

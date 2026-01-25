@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Prince-Letsyo/task-management-api-go/config"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
 
 type (
@@ -122,7 +123,7 @@ func (middleWare *passwordResetMiddleWare) ValidatePasswordResetData(c *fiber.Ct
 }
 
 func _validatePasswordReset(c *fiber.Ctx, appCfg *config.AppCfg, t string) error {
-	t, err := pkg.Decrypt(t, appCfg.Server.Key)
+	t, err := appCfg.Encryptor.Decrypt(t)
 	if err != nil {
 		return errors.New("invalid password reset token")
 	}

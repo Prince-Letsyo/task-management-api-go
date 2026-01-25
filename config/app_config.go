@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 	"github.com/gofiber/fiber/v2"
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/oarkflow/log"
@@ -31,6 +32,7 @@ type AppCfg struct {
 	Storage    StorageConfig  `yaml:"storage"`
 	Session    SessionConfig  `yaml:"session"`
 	ConfigFile string
+	Encryptor  *pkg.Encryptor
 }
 
 func (cfg *AppCfg) Route404() {
@@ -75,6 +77,12 @@ func (cfg *AppCfg) LoadComponents() {
 	_ = cfg.Session.Setup()
 	cfg.Cache.Setup()
 	cfg.Storage.Setup()
+	
+	var err error
+	cfg.Encryptor, err = pkg.NewEncryptor(cfg.Server.Key)
+	if err != nil {
+		logger.Fatalf("cannot create encryptor: %s", err)
+	}
 }
 
 func (cfg *AppCfg) LoadStatic() {

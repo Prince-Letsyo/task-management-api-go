@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
-	"github.com/Prince-Letsyo/task-management-api-go/config"
-	"github.com/Prince-Letsyo/task-management-api-go/internal/middleware"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/service"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg/types"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/middleware"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/service"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
 
 type IAuthController interface {
@@ -63,10 +63,10 @@ func (controller *authController) register() fiber.Handler {
 	return func(context *fiber.Ctx) error {
 		register := context.Locals("register").(*types.User)
 
-		go service.NewAccountAdapterService(
-			controller.AppCfg, service.AccountAdapterService{
-				IUserService: controller.userService,
-			}).SendConfirmationEmail(
+		go service.NewAccountService(
+			controller.AppCfg,
+			controller.userService,
+		).SendConfirmationEmail(
 			register.Email,
 			service.GenerateConfirmPath(context, controller.Server.Redirect),
 		)
@@ -89,16 +89,15 @@ func (controller *authController) verifyRegisteredEmail() fiber.Handler {
 
 func (controller *authController) resendConfirmEmail() fiber.Handler {
 	return func(context *fiber.Ctx) error {
-		accountAdapter := service.NewAccountAdapterService(
+		accountAdapter := service.NewAccountService(
 			controller.AppCfg,
-			service.AccountAdapterService{
-				IUserService: controller.userService,
-			})
+			controller.userService,
+		)
 		user := context.Locals("user").(*types.User)
 
 		go accountAdapter.SendConfirmationEmail(
 			user.Email,
-			service.GenerateConfirmPath(context, app.HTTP.Server.Redirect),
+			service.GenerateConfirmPath(context, controller.Server.Redirect),
 		)
 		return context.Status(fiber.StatusOK).JSON(fiber.Map{
 			"success": true,
@@ -147,18 +146,17 @@ func (controller *authController) requestPasswordReset() fiber.Handler {
 				"message": "Error on request password reset request",
 			})
 		}
-		rediect := app.HTTP.Server.Redirect
+		rediect := controller.Server.Redirect
 
 		if rediect == "" {
 			rediect = fmt.Sprintf("%s/reset-password", context.BaseURL())
 		} else {
 			rediect = fmt.Sprintf("%s/auth/reset-password", rediect)
 		}
-		go service.NewAccountAdapterService(
+		go service.NewAccountService(
 			controller.AppCfg,
-			service.AccountAdapterService{
-				IUserService: controller.userService,
-			}).SendPasswordResetEmail(
+			controller.userService,
+		).SendPasswordResetEmail(
 			user.Email,
 			rediect,
 		)
@@ -200,11 +198,10 @@ func (controller *authController) login() fiber.Handler {
 		data := fiber.Map{}
 
 		errToken := service.
-			NewAccountAdapterService(
+			NewAccountService(
 				controller.AppCfg,
-				service.AccountAdapterService{
-					IUserService: controller.userService,
-						}).
+				controller.userService,
+			).
 			Login(context, user) //nolint:wsl
 
 		if errToken != nil && !ok {
@@ -217,7 +214,7 @@ func (controller *authController) login() fiber.Handler {
 
 		access := context.Cookies("access-token")
 		if access == "" {
-			sess, err := app.HTTP.Session.Get(context)
+			sess, err := controller.Session.Get(context)
 			if err != nil {
 				data["error"] = "Session error"
 				return context.Status(fiber.StatusInternalServerError).JSON(data)
@@ -270,11 +267,10 @@ func (controller *authController) logout() fiber.Handler {
 	return func(context *fiber.Ctx) error {
 		data := fiber.Map{}
 
-		err := service.NewAccountAdapterService(
+		err := service.NewAccountService(
 			controller.AppCfg,
-			service.AccountAdapterService{
-				IUserService: controller.userService,
-			}).Logout(context)
+			controller.userService,
+		).Logout(context)
 		if err != nil {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusInternalServerError).JSON(data)
@@ -312,11 +308,10 @@ func (controller *authController) createNewAccessToken() fiber.Handler {
 			data["error"] = err.Error()
 			return context.Status(fiber.StatusInternalServerError).JSON(data)
 		}
-		accountService := service.NewAccountAdapterService(
+		accountService := service.NewAccountService(
 			controller.AppCfg,
-			service.AccountAdapterService{
-				IUserService: controller.userService,
-			})
+			controller.userService,
+		)
 
 		err = accountService.AccessTokenCreate(context, user)
 		if err != nil {
@@ -325,7 +320,7 @@ func (controller *authController) createNewAccessToken() fiber.Handler {
 		}
 		access := context.Cookies("access-token")
 		if access == "" {
-			sess, err := app.HTTP.Session.Get(context)
+			sess, err := controller.Session.Get(context)
 			if err != nil {
 				data["error"] = "Session error"
 				return context.Status(fiber.StatusInternalServerError).JSON(data)

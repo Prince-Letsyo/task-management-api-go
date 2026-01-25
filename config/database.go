@@ -25,7 +25,7 @@ type DatabaseDriver struct {
 	MinConns          int           `yaml:"min_conns" env:"MIN_CONNS" env-default:"5"`
 	MaxConnLifetime   time.Duration `yaml:"max_conn_lifetime" env:"MAX_CONN_LIFETIME" env-default:"10m"`
 	MaxConnIdleTime   time.Duration `yaml:"max_conn_idle_time" env:"MAX_CONN_IDLE_TIME" env-default:"10m"`
-	HealthCheckPeriod time.Duration `yaml:"health_check_period" env:"HEALTH_CHECK_PERIOD" env-default:level"1m"`
+	HealthCheckPeriod time.Duration `yaml:"health_check_period" env:"HEALTH_CHECK_PERIOD" env-default:"1m"`
 }
 
 type DatabaseConfig struct {
