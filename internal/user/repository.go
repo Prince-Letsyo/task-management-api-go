@@ -44,6 +44,7 @@ func (dbUserRepository *DBUserRepository) typeModel(user *types.User) *model.Use
 		UserName:     user.UserName,
 		TOTPSecret:   user.TOTPSecret,
 		Is2FAEnabled: user.Is2FAEnabled,
+		RefreshTokenVersion: user.RefreshTokenVersion,
 		Profile:      profile,
 	}
 }
@@ -74,6 +75,7 @@ func (dbUserRepository *DBUserRepository) modelType(userModel *model.User) *type
 		UserName:     userModel.UserName,
 		TOTPSecret:   userModel.TOTPSecret,
 		Is2FAEnabled: userModel.Is2FAEnabled,
+		RefreshTokenVersion: userModel.RefreshTokenVersion,
 		Profile:      profile,
 	}
 }

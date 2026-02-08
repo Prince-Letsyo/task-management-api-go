@@ -5,10 +5,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/bytebufferpool"
 	mail "github.com/xhit/go-simple-mail/v2"
-
-	"github.com/gofiber/fiber/v2"
 )
 
 type Mail struct {
@@ -33,13 +32,13 @@ func (m *Mail) Send(to string, subject string, body string, cc string, from stri
 	}
 	// New email simple html with inline and CC
 	email := mail.NewMSG()
-	email.SetFrom(from). //nolint:wsl
-				AddTo(to).
-				SetSubject(subject)
-	if cc != "" { //nolint:wsl
+	email.SetFrom(from).
+		AddTo(to).
+		SetSubject(subject)
+	if cc != "" {
 		email.AddCc(cc)
 	}
-	email.SetBody(mail.TextHTML, body) //nolint:wsl
+	email.SetBody(mail.TextHTML, body)
 
 	// Call Send and pass the client
 	err := email.Send(m.SMTPClient)

@@ -1,0 +1,380 @@
+{
+  "info": {
+    "name": "Task Management API (Go) - Auth",
+    "_postman_id": "9c69b0de-3e4f-4e3b-b2d4-16c2f7a7872a",
+    "description": "Auth endpoints for task-management-api-go",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Sign Up",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"first_name\":\"Alice\",\"last_name\":\"Doe\",\"username\":\"alice\",\"email\":\"alice@example.com\",\"password_one\":\"CorrectHorseBatteryStaple1!\",\"password_two\":\"CorrectHorseBatteryStaple1!\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/sign-up",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "sign-up"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Activate Account",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/activate-account?token={{activation_token}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "activate-account"
+          ],
+          "query": [
+            {
+              "key": "token",
+              "value": "{{activation_token}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Sign In",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\":\"alice\",\"password\":\"CorrectHorseBatteryStaple1!\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/sign-in",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "sign-in"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Sign In MFA",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"token\":\"{{temp_2fa_token}}\",\"totp_token\":\"123456\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/sign-in-mfa",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "sign-in-mfa"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Refresh Access",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"token\":\"{{refresh_token}}\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/access",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "access"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Request Password Reset",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\":\"alice@example.com\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/request-password-reset",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "request-password-reset"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Reset Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\":\"alice@example.com\",\"token\":\"{{password_reset_token}}\",\"password_one\":\"CorrectHorseBatteryStaple1!\",\"password_two\":\"CorrectHorseBatteryStaple1!\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/reset-password",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "reset-password"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"token\":\"{{refresh_token}}\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/logout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "logout"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Logout All",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/logout-all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "logout-all"
+          ]
+        }
+      }
+    },
+    {
+      "name": "List Sessions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/sessions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "sessions"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Change Email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"new_email\":\"alice2@example.com\",\"password\":\"CorrectHorseBatteryStaple1!\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/change-email",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "change-email"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Admin Revoke Sessions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{admin_api_key}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/admin/revoke-sessions/{{user_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "admin",
+            "revoke-sessions",
+            "{{user_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Enable 2FA",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/enable-2fa",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "enable-2fa"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Disable 2FA",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/disable-2fa",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "disable-2fa"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "activation_token", "value": "" },
+    { "key": "password_reset_token", "value": "" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "temp_2fa_token", "value": "" },
+    { "key": "admin_api_key", "value": "change-me" },
+    { "key": "user_id", "value": "1" }
+  ]
+}

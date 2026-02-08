@@ -3,10 +3,12 @@ package main
 import (
 	"log"
 
-	_ "ariga.io/atlas-provider-gorm/gormschema"
+	"github.com/spf13/pflag"
+
 	"github.com/Prince-Letsyo/task-management-api-go/cmd/app"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/core"
-	"github.com/spf13/pflag"
+
+	_ "ariga.io/atlas-provider-gorm/gormschema"
 )
 
 func main() {

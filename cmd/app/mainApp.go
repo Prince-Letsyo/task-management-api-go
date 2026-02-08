@@ -2,7 +2,6 @@
 package app
 
 import (
-	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/etag"
@@ -11,6 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/gofiber/helmet/v2"
 	"github.com/mikhail-bigun/fiberlogrus"
+
+	"github.com/Prince-Letsyo/task-management-api-go/config"
 )
 
 var (

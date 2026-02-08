@@ -1,445 +1,418 @@
 package auth
 
 import (
-	"fmt"
-	"reflect"
+	"strings"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Prince-Letsyo/task-management-api-go/config"
-	"github.com/Prince-Letsyo/task-management-api-go/internal/middleware"
-	"github.com/Prince-Letsyo/task-management-api-go/internal/service"
-	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
 
 type IAuthController interface {
-	login() fiber.Handler
-	logout() fiber.Handler
-	register() fiber.Handler
-	verifyRegisteredEmail() fiber.Handler
-	resendConfirmEmail() fiber.Handler
-	passwordResetComfirm() fiber.Handler
-	passwordResetComplete() fiber.Handler
-	passwordReset() fiber.Handler
+	signUp() fiber.Handler
+	signIn() fiber.Handler
+	signInMFA() fiber.Handler
+	getAccessToken() fiber.Handler
+	activateAccount() fiber.Handler
+	sendActivationEmail() fiber.Handler
 	requestPasswordReset() fiber.Handler
-	createNewAccessToken() fiber.Handler
-	verifyToken() fiber.Handler
+	resetPassword() fiber.Handler
+	logout() fiber.Handler
+	logoutAll() fiber.Handler
+	listSessions() fiber.Handler
+	changeEmail() fiber.Handler
+	adminRevokeSessions() fiber.Handler
+	enable2FA() fiber.Handler
+	disable2FA() fiber.Handler
 }
 
 type Auth struct {
-	router          fiber.Router
-	userService     types.IUserService
-	registerService types.IRegisterService
-	loginService    types.ILoginService
-}
-
-type AccesstokenRes struct {
-	AccessToken    string `json:"access_token" binding:"required"`
-	AccessTokenExp string `json:"access_token_expire"`
-}
-
-type RefreshtokenRes struct {
-	RefreshToken    string `json:"refresh_token" binding:"required"`
-	RefreshTokenExp string `json:"refresh_token_expire" `
-}
-
-type Token struct {
-	Token string `json:"token" binding:"required"`
-}
-
-type tokenRes struct {
-	Access  AccesstokenRes  `json:"access" binding:"required"`
-	Refresh RefreshtokenRes `json:"refresh" binding:"required"`
+	router fiber.Router
 }
 
 type authController struct {
 	Auth
 	*config.AppCfg
+	service IAuthService
 }
 
-func (controller *authController) register() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		register := context.Locals("register").(*types.User)
-
-		go service.NewAccountService(
-			controller.AppCfg,
-			controller.userService,
-		).SendConfirmationEmail(
-			register.Email,
-			service.GenerateConfirmPath(context, controller.Server.Redirect),
+func (controller *authController) signUp() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		req := &UserCreateRequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
+		}
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
+		}
+		if req.Password != req.PasswordTwo {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "passwords do not match"})
+		}
+		validation := pkg.DefaultValidator.ValidatePassword(req.Password, req.UserName, req.Email)
+		if !validation.IsValid {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": validation.Errors[0]})
+		}
+		_, token, _, err := controller.service.SignUp(req)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		activationLink := controller.activationLink(c, token)
+		go controller.AppCfg.Mail.Send(
+			req.Email,
+			"Activate Your Account",
+			controller.AppCfg.Mail.PrepareHTML("emails/confirm", fiber.Map{
+				"Title":        "Email Confirmation",
+				"confirm_link": activationLink,
+			}),
+			"",
+			controller.AppCfg.Mail.FromAddress,
 		)
-
-		return context.JSON(fiber.Map{
-			"success": true,
-			"message": "Registered successfully! Please confirm your email",
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+			"message": "User created successfully. Please check your email to activate your account.",
 		})
 	}
 }
 
-func (controller *authController) verifyRegisteredEmail() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		return context.Status(fiber.StatusOK).JSON(fiber.Map{
-			"success": true,
-			"message": "User successfully verified...",
-		})
+func (controller *authController) signIn() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		req := &AuthLoginRequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
+		}
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
+		}
+		userAgent, ipAddr := requestMeta(c)
+		resp, err := controller.service.Login(req.UserName, req.Password, userAgent, ipAddr)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(resp)
 	}
 }
 
-func (controller *authController) resendConfirmEmail() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		accountAdapter := service.NewAccountService(
-			controller.AppCfg,
-			controller.userService,
-		)
-		user := context.Locals("user").(*types.User)
+func (controller *authController) signInMFA() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		req := &Verify2FARequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
+		}
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
+		}
+		userAgent, ipAddr := requestMeta(c)
+		resp, err := controller.service.Login2FA(req.Token, req.TOTPToken, userAgent, ipAddr)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(resp)
+	}
+}
 
-		go accountAdapter.SendConfirmationEmail(
-			user.Email,
-			service.GenerateConfirmPath(context, controller.Server.Redirect),
+func (controller *authController) getAccessToken() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		req := &TokenRequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
+		}
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
+		}
+		token, err := controller.service.GetAccessToken(req.Token)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(token)
+	}
+}
+
+func (controller *authController) activateAccount() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		token := strings.TrimSpace(c.Query("token"))
+		if token == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "missing token"})
+		}
+		_, err := controller.service.ActivateAccount(token)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Account activated successfully. You can now log in."})
+	}
+}
+
+func (controller *authController) sendActivationEmail() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		req := &ActivationEmailRequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
+		}
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
+		}
+		_, token, _, err := controller.service.SendActivationEmail(req.Email)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		activationLink := controller.activationLink(c, token)
+		go controller.AppCfg.Mail.Send(
+			req.Email,
+			"Activate Your Account",
+			controller.AppCfg.Mail.PrepareHTML("emails/confirm", fiber.Map{
+				"Title":        "Email Confirmation",
+				"confirm_link": activationLink,
+			}),
+			"",
+			controller.AppCfg.Mail.FromAddress,
 		)
-		return context.Status(fiber.StatusOK).JSON(fiber.Map{
-			"success": true,
-			"message": "Please confirm your email",
-		})
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Activation email sent successfully. Please check your email."})
 	}
 }
 
 func (controller *authController) requestPasswordReset() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		requestPasswordReset := &types.RequestPasswordResetForm{}
-		if err := context.BodyParser(requestPasswordReset); err != nil {
-			return context.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
-				"error": "failed parsinng request  body",
-			})
-		}
-		if errs := pkg.ValidateStruct(requestPasswordReset); len(errs) > 0 {
-			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"errors": errs,
-			})
-		}
-
-		if validErr := pkg.VI.Vi.Struct(requestPasswordReset); validErr != nil {
-			errorsfield := make(map[string][]string)
-			pass := reflect.TypeOf(types.RequestPasswordResetForm{})
-
-			for _, err := range validErr.(validator.ValidationErrors) {
-				fieldName := err.Field()
-				if field, ok := pass.FieldByName(fieldName); !ok {
-					return context.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{})
-				} else {
-					fieldJSON := field.Tag.Get("json")
-					errorsfield[fieldJSON] = append(errorsfield[fieldJSON], err.Tag())
-				}
-			}
-			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": errorsfield,
-			})
-		}
-
-		user := &types.User{}
-		user, err := controller.userService.ViewByEmail(requestPasswordReset.Email, user)
-		if err != nil {
-			return context.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error":   err.Error(),
-				"message": "Error on request password reset request",
-			})
-		}
-		rediect := controller.Server.Redirect
-
-		if rediect == "" {
-			rediect = fmt.Sprintf("%s/reset-password", context.BaseURL())
-		} else {
-			rediect = fmt.Sprintf("%s/auth/reset-password", rediect)
-		}
-		go service.NewAccountService(
-			controller.AppCfg,
-			controller.userService,
-		).SendPasswordResetEmail(
-			user.Email,
-			rediect,
-		)
-		return context.Status(fiber.StatusOK).JSON(fiber.Map{
-			"success": true,
-			"message": "We've sent an email for password to your registered email address",
-		})
-	}
-}
-
-func (controller *authController) passwordReset() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"data": fiber.Map{},
-		})
-	}
-}
-
-func (controller *authController) passwordResetComfirm() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		return context.Status(fiber.StatusOK).JSON(fiber.Map{
-			"data": fiber.Map{},
-		})
-	}
-}
-
-func (controller *authController) passwordResetComplete() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		return context.Status(fiber.StatusOK).JSON(fiber.Map{
-			"data": fiber.Map{},
-		})
-	}
-}
-
-func (controller *authController) login() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		user := context.Locals("user").(*types.User)
-		errS, ok := context.Locals("err").(string)
-		data := fiber.Map{}
-
-		errToken := service.
-			NewAccountService(
-				controller.AppCfg,
-				controller.userService,
-			).
-			Login(context, user) //nolint:wsl
-
-		if errToken != nil && !ok {
-			data["error"] = errToken.Error()
-			return context.Status(fiber.StatusUnauthorized).JSON(data)
-		} else if errS != "" {
-			data["error"] = errS
-			return context.Status(fiber.StatusBadRequest).JSON(data)
+		req := &ActivationEmailRequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
 		}
-
-		access := context.Cookies("access-token")
-		if access == "" {
-			sess, err := controller.Session.Get(context)
-			if err != nil {
-				data["error"] = "Session error"
-				return context.Status(fiber.StatusInternalServerError).JSON(data)
-			}
-			access = sess.Get("access-token").(string)
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
-		accessClaims, errAC := controller.JwtSecrets.ParseAccessToken(access)
-		if errAC != nil {
-			return context.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Parsing token error"})
-		}
-		accessExpire, err := accessClaims.GetExpirationTime()
+		_, token, _, err := controller.service.RequestPasswordReset(req.Email)
 		if err != nil {
-			return context.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Parsing token error"})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
+		resetLink := controller.resetLink(c, token)
+		go controller.AppCfg.Mail.Send(
+			req.Email,
+			"Password Reset Request",
+			controller.AppCfg.Mail.PrepareHTML("emails/password-reset", fiber.Map{
+				"Title":      "Password Reset",
+				"reset_link": resetLink,
+			}),
+			"",
+			controller.AppCfg.Mail.FromAddress,
+		)
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "A password reset link has been sent to your email."})
+	}
+}
 
-		refresh := context.Cookies("refresh-token")
-		if refresh == "" {
-			sess, err := controller.Session.Get(context)
-			if err != nil {
-				data["error"] = "Session error"
-				return context.Status(fiber.StatusInternalServerError).JSON(data)
-			}
-			refresh = sess.Get("refresh-token").(string)
+func (controller *authController) resetPassword() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		req := &PasswordResetRequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
 		}
-		refreshClaims, errRC := controller.JwtSecrets.ParseRefreshToken(refresh)
-		if errRC != nil {
-			return context.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Parsing token error"})
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
-		refreshExpire, err := refreshClaims.GetExpirationTime()
+		if req.PasswordOne != req.PasswordTwo {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "passwords do not match"})
+		}
+		_, err := controller.service.ResetPassword(req.Token, req.Email, req.PasswordOne)
 		if err != nil {
-			return context.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Parsing token error"})
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
-
-		data["user"] = user
-		data["token"] = tokenRes{
-			Access: AccesstokenRes{
-				AccessToken:    access,
-				AccessTokenExp: accessExpire.String(),
-			},
-			Refresh: RefreshtokenRes{
-				RefreshToken:    refresh,
-				RefreshTokenExp: refreshExpire.String(),
-			},
-		}
-		return context.Status(fiber.StatusOK).JSON(data)
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Password has been reset successfully."})
 	}
 }
 
 func (controller *authController) logout() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		data := fiber.Map{}
-
-		err := service.NewAccountService(
-			controller.AppCfg,
-			controller.userService,
-		).Logout(context)
-		if err != nil {
-			data["error"] = err.Error()
-			return context.Status(fiber.StatusInternalServerError).JSON(data)
+	return func(c *fiber.Ctx) error {
+		req := &TokenRequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
 		}
-
-		return context.Status(fiber.StatusNoContent).JSON(data)
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
+		}
+		if err := controller.service.Logout(req.Token); err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Logged out"})
 	}
 }
 
-func (controller *authController) createNewAccessToken() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		refreshTokenRes := &RefreshtokenRes{}
-		data := fiber.Map{}
-
-		if err := context.BodyParser(refreshTokenRes); err != nil {
-			data["error"] = "failed parsinng request body"
-			return context.Status(fiber.StatusUnprocessableEntity).JSON(data)
-		}
-		if errs := pkg.ValidateStruct(refreshTokenRes); len(errs) > 0 {
-			data["errors"] = errs
-			return context.Status(fiber.StatusBadRequest).JSON(data)
-		}
-		refreshTokenClaim, err := controller.JwtSecrets.ParseRefreshToken(refreshTokenRes.RefreshToken)
+func (controller *authController) logoutAll() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
 		if err != nil {
-			data["error"] = err.Error()
-			return context.Status(fiber.StatusBadRequest).JSON(data)
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
-		if err := refreshTokenClaim.Valid(); err != nil {
-			data["error"] = err.Error()
-			return context.Status(fiber.StatusUnauthorized).JSON(data)
+		if err := controller.service.LogoutAll(claims.UserID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		user := &types.User{}
-		user, err = controller.userService.ViewByEmail(refreshTokenClaim.Email, user)
-		if err != nil {
-			data["error"] = err.Error()
-			return context.Status(fiber.StatusInternalServerError).JSON(data)
-		}
-		accountService := service.NewAccountService(
-			controller.AppCfg,
-			controller.userService,
-		)
-
-		err = accountService.AccessTokenCreate(context, user)
-		if err != nil {
-			data["error"] = err.Error()
-			return context.Status(fiber.StatusInternalServerError).JSON(data)
-		}
-		access := context.Cookies("access-token")
-		if access == "" {
-			sess, err := controller.Session.Get(context)
-			if err != nil {
-				data["error"] = "Session error"
-				return context.Status(fiber.StatusInternalServerError).JSON(data)
-			}
-			access = sess.Get("access-token").(string)
-		}
-		accessTokenClaim, err := controller.JwtSecrets.ParseAccessToken(access)
-		if err != nil {
-			return context.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Parsing token error"})
-		}
-		data["token"] = AccesstokenRes{
-			AccessToken:    access,
-			AccessTokenExp: accessTokenClaim.ExpiresAt.String(),
-		}
-		return context.Status(fiber.StatusOK).JSON(data)
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Logged out from all sessions"})
 	}
 }
 
-func (controller *authController) verifyToken() fiber.Handler {
-	return func(context *fiber.Ctx) error {
-		token := &Token{}
-		data := fiber.Map{}
-
-		if err := context.BodyParser(token); err != nil {
-			data["error"] = "failed parsinng request body"
-			return context.Status(fiber.StatusBadRequest).JSON(data)
-		}
-		if errs := pkg.ValidateStruct(token); len(errs) > 0 {
-			data["errors"] = errs
-			return context.Status(fiber.StatusBadRequest).JSON(data)
-		}
-		accessToken, err := controller.JwtSecrets.ParseAccessToken(token.Token)
+func (controller *authController) listSessions() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
 		if err != nil {
-			data["error"] = err.Error()
-			return context.Status(fiber.StatusBadRequest).JSON(data)
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
-
-		data["token"] = AccesstokenRes{
-			AccessToken:    token.Token,
-			AccessTokenExp: accessToken.ExpiresAt.String(),
+		sessions, err := controller.service.ListSessions(claims.UserID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-
-		return context.Status(fiber.StatusOK).JSON(data)
+		result := make([]fiber.Map, 0, len(sessions))
+		for _, session := range sessions {
+			result = append(result, fiber.Map{
+				"id":           session.ID,
+				"user_agent":   session.UserAgent,
+				"ip_address":   session.IPAddress,
+				"created_at":   session.CreatedAt,
+				"last_used_at": session.LastUsedAt,
+				"revoked_at":   session.RevokedAt,
+			})
+		}
+		return c.Status(fiber.StatusOK).JSON(result)
 	}
 }
 
-func newAuthController(
-	authC Auth,
-	appCfg *config.AppCfg,
-) IAuthController {
+func (controller *authController) changeEmail() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		req := &ChangeEmailRequest{}
+		if err := c.BodyParser(req); err != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "failed parsing request body"})
+		}
+		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
+		}
+		if err := controller.service.ChangeEmail(claims.Username, req.NewEmail, req.Password); err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Email updated successfully"})
+	}
+}
+
+func (controller *authController) adminRevokeSessions() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		apiKey := c.Get("X-API-Key")
+		if apiKey == "" || apiKey != controller.AppCfg.Auth.AdminAPIKey {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid api key"})
+		}
+		userID, err := c.ParamsInt("user_id")
+		if err != nil || userID <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user id"})
+		}
+		if err := controller.service.AdminRevokeSessions(uint(userID)); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "User sessions revoked"})
+	}
+}
+
+func (controller *authController) enable2FA() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		secret, qr, err := controller.service.Enable2FA(claims.Username)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"secret":  secret,
+			"qr_code": qr,
+			"message": "2FA enabled. Scan with your app.",
+		})
+	}
+}
+
+func (controller *authController) disable2FA() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		if err := controller.service.Disable2FA(claims.Username); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "2FA disabled"})
+	}
+}
+
+func LoadAuthRoutes(router fiber.Router, appCfg *config.AppCfg) {
+	newAuthController(Auth{
+		router: router.Group("/auth/"),
+	}, appCfg)
+}
+
+func newAuthController(authC Auth, appCfg *config.AppCfg) IAuthController {
+	repo := NewDBAuthRepository(appCfg)
 	controller := &authController{
-		Auth:   authC,
-		AppCfg: appCfg,
+		Auth:    authC,
+		AppCfg:  appCfg,
+		service: NewAuthService(appCfg, repo),
 	}
-	registerMiddleWare := middleware.NewRegisterMiddleWare(
-		middleware.RegisterMiddleWare{
-			IUserService:     controller.userService,
-			IRegisterService: controller.registerService,
-		}, appCfg)
 
-	loginMiddleWare := middleware.NewLoginMiddleWare(
-		middleware.LoginMiddleWare{
-			IUserService:  controller.userService,
-			ILoginService: controller.loginService,
-		}, appCfg)
-	passwordMiddleWare := middleware.NewPasswordResetMiddleWare(
-		middleware.PasswordResetMiddleWare{
-			IUserService:     controller.userService,
-			IRegisterService: controller.registerService,
-		}, appCfg)
-	controller.router.Post(
-		"register",
-		registerMiddleWare.ValidateRegister,
-		controller.register(),
-	)
-
-	controller.router.Get(
-		"verify-email",
-		registerMiddleWare.ValidateConfirmToken,
-		controller.verifyRegisteredEmail(),
-	)
-
-	controller.router.Get(
-		"resend/confirm",
-		controller.resendConfirmEmail(),
-	)
-	controller.router.Post(
-		"request-password-reset",
-		controller.requestPasswordReset())
-
-	controller.router.Get("reset-password",
-		passwordMiddleWare.ValidatePasswordReset,
-		controller.passwordReset(),
-	)
-	controller.router.Post("password-reset-confirm",
-		passwordMiddleWare.ValidatePasswordResetToken,
-		controller.passwordResetComfirm(),
-	)
-	controller.router.Patch("reset-password-complete",
-		passwordMiddleWare.ValidatePasswordResetData,
-		controller.passwordResetComplete(),
-	)
-	controller.router.Post("login",
-		loginMiddleWare.ValidateLoginPost,
-		controller.login())
-	controller.router.Post("logout", controller.logout())
-
-	tokenRoute := controller.router.Group("token/",
-		loginMiddleWare.RedirectToHomePageOnLogin,
-	)
-
-	tokenRoute.Post(
-		"refresh/",
-		controller.createNewAccessToken(),
-	)
-	tokenRoute.Post(
-		"verify/",
-		controller.verifyToken(),
-	)
-
+	controller.registerRoutes()
 	return controller
+}
+
+func (controller *authController) activationLink(c *fiber.Ctx, token string) string {
+	base := controller.Server.Redirect
+	if base == "" {
+		return c.BaseURL() + "/api/auth/activate-account?token=" + token
+	}
+	base = strings.TrimRight(base, "/")
+	return base + "/auth/activate-account?token=" + token
+}
+
+func (controller *authController) resetLink(c *fiber.Ctx, token string) string {
+	base := controller.Server.Redirect
+	if base == "" {
+		return c.BaseURL() + "/api/auth/reset-password?token=" + token
+	}
+	base = strings.TrimRight(base, "/")
+	return base + "/auth/reset-password?token=" + token
+}
+
+func requestMeta(c *fiber.Ctx) (*string, *string) {
+	ua := c.Get("User-Agent")
+	ip := c.IP()
+	var uaPtr *string
+	var ipPtr *string
+	if ua != "" {
+		uaPtr = &ua
+	}
+	if ip != "" {
+		ipPtr = &ip
+	}
+	return uaPtr, ipPtr
+}
+
+func newAuthControllerWithService(authC Auth, appCfg *config.AppCfg, service IAuthService) IAuthController {
+	controller := &authController{
+		Auth:    authC,
+		AppCfg:  appCfg,
+		service: service,
+	}
+	controller.registerRoutes()
+	return controller
+}
+
+func (controller *authController) registerRoutes() {
+	controller.router.Post("sign-up", controller.signUp())
+	controller.router.Post("sign-in", controller.signIn())
+	controller.router.Post("sign-in-mfa", controller.signInMFA())
+	controller.router.Post("access", controller.getAccessToken())
+	controller.router.Get("activate-account", controller.activateAccount())
+	controller.router.Post("send-activation-email", controller.sendActivationEmail())
+	controller.router.Post("request-password-reset", controller.requestPasswordReset())
+	controller.router.Post("reset-password", controller.resetPassword())
+	controller.router.Post("logout", controller.logout())
+	controller.router.Post("logout-all", controller.logoutAll())
+	controller.router.Get("sessions", controller.listSessions())
+	controller.router.Post("change-email", controller.changeEmail())
+	controller.router.Post("admin/revoke-sessions/:user_id", controller.adminRevokeSessions())
+	controller.router.Post("enable-2fa", controller.enable2FA())
+	controller.router.Post("disable-2fa", controller.disable2FA())
 }

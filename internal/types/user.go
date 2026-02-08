@@ -14,6 +14,7 @@ type User struct {
 	IsAdmin      bool     `json:"is_admin" `
 	Is2FAEnabled bool     `json:"is_2fa_enabled" `
 	TOTPSecret   *string  `json:"totp_secret" `
+	RefreshTokenVersion int `json:"refresh_token_version"`
 	Profile      *Profile `json:"profile"`
 }
 

@@ -10,10 +10,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/auth"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/model"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
 )
 
@@ -71,26 +74,14 @@ func TestProfileController_GetProfile(t *testing.T) {
 	}
 
 	mockProfileSvc := new(MockProfileService)
-	// We need a dummy user mock just to satisfy the struct,
-	// though it's not called directly by GetProfile logic (only passed to AccountService)
-	// Actually, AccountService doesn't use the injected repo for UserID(), it uses JWT.
-	// So nil might work if we weren't type checking, but let's be safe.
-	// Wait, we need types.IUserService.
-	// We can use the mock from user package if public? No, strictly separate.
-	// We'll just define a minimal mock here or pass nil if the interface allows (it won't).
-
-	// Creating a minimal inline mock for IUserService would require implementing all methods.
-	// Instead I'll just rely on the fact that UserID() doesn't call any IUserService methods.
-	// However, I need to pass *something* that implements IUserService.
-	// I'll create a simple dummy implementation struct.
-
-	// Better: Use a simple struct implementing the interface with no-ops.
+	// Use a dummy user service to satisfy the interface.
 	dummyUserSvc := &DummyUserService{}
 
 	userProfile := Profile{
 		router:         app,
 		profileService: mockProfileSvc,
 		userService:    dummyUserSvc,
+		authService:    &DummyAuthService{},
 	}
 
 	// Init Controller
@@ -98,9 +89,17 @@ func TestProfileController_GetProfile(t *testing.T) {
 
 	// Prepare Token
 	userID := uint(1)
-	user := types.User{ID: userID, Email: "test@test.com"}
-	claims := config.NewUserClaims(user, time.Hour)
-	token, _ := appCfg.JwtSecrets.NewAccessToken(claims)
+	claims := auth.AuthClaims{
+		Username:  "testuser",
+		Email:     "test@test.com",
+		UserID:    userID,
+		TokenType: "access",
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}
+	token, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(appCfg.JwtSecrets.Secret))
 
 	// Prepare Request
 	req := httptest.NewRequest("GET", "/", nil)
@@ -162,4 +161,49 @@ func (d *DummyUserService) ViewVerifiedUserByEmail(email string, user *types.Use
 func (d *DummyUserService) List(filters *types.UserFilters) (*types.UserPage, error) { return nil, nil }
 func (d *DummyUserService) Modify(id uint, updatedValues map[string]interface{}) (*types.User, error) {
 	return nil, nil
+}
+
+type DummyAuthService struct{}
+
+func (d *DummyAuthService) SignUp(userCreate *auth.UserCreateRequest) (*model.User, string, time.Time, error) {
+	return nil, "", time.Time{}, nil
+}
+func (d *DummyAuthService) SendActivationEmail(email string) (*model.User, string, time.Time, error) {
+	return nil, "", time.Time{}, nil
+}
+func (d *DummyAuthService) ActivateAccount(token string) (*model.User, error) { return nil, nil }
+func (d *DummyAuthService) Login(username string, password string, userAgent *string, ipAddress *string) (*auth.UserResponse, error) {
+	return nil, nil
+}
+func (d *DummyAuthService) Login2FA(tempToken string, totpToken string, userAgent *string, ipAddress *string) (*auth.UserResponse, error) {
+	return nil, nil
+}
+func (d *DummyAuthService) GetAccessToken(refreshToken string) (*auth.TokenModel, error) {
+	return nil, nil
+}
+func (d *DummyAuthService) RequestPasswordReset(email string) (*model.User, string, time.Time, error) {
+	return nil, "", time.Time{}, nil
+}
+func (d *DummyAuthService) ResetPassword(token string, email string, password string) (*model.User, error) {
+	return nil, nil
+}
+func (d *DummyAuthService) Logout(refreshToken string) error                  { return nil }
+func (d *DummyAuthService) LogoutAll(userID uint) error                       { return nil }
+func (d *DummyAuthService) ListSessions(userID uint) ([]model.Session, error) { return nil, nil }
+func (d *DummyAuthService) ChangeEmail(username string, newEmail string, password string) error {
+	return nil
+}
+func (d *DummyAuthService) AdminRevokeSessions(userID uint) error             { return nil }
+func (d *DummyAuthService) Enable2FA(username string) (string, string, error) { return "", "", nil }
+func (d *DummyAuthService) Disable2FA(username string) error                  { return nil }
+func (d *DummyAuthService) ValidateAccessToken(token string) (*auth.AuthClaims, error) {
+	return &auth.AuthClaims{
+		UserID:    1,
+		Username:  "testuser",
+		TokenType: "access",
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}, nil
 }
