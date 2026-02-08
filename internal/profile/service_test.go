@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
 )
 
@@ -33,8 +32,7 @@ func (m *MockProfileRepository) update(id uint, profile *types.Profile) (*types.
 
 func TestProfileService_View(t *testing.T) {
 	mockRepo := new(MockProfileRepository)
-	appCfg := &config.AppCfg{}
-	service, _ := newProfileService(appCfg, withDatabaseProfileRepository(mockRepo))
+	service, _ := newProfileService(withDatabaseProfileRepository(mockRepo))
 
 	userID := uint(1)
 	bio := "Test Bio"
@@ -51,8 +49,7 @@ func TestProfileService_View(t *testing.T) {
 
 func TestProfileService_Modify(t *testing.T) {
 	mockRepo := new(MockProfileRepository)
-	appCfg := &config.AppCfg{}
-	service, _ := newProfileService(appCfg, withDatabaseProfileRepository(mockRepo))
+	service, _ := newProfileService(withDatabaseProfileRepository(mockRepo))
 
 	userID := uint(1)
 	bio := "Updated Bio"

@@ -135,26 +135,25 @@ func (m *MockAuthRepository) ListSessions(userID uint) ([]model.Session, error) 
 	return args.Get(0).([]model.Session), args.Error(1)
 }
 
-func authTestConfig() *config.AppCfg {
-	return &config.AppCfg{
-		JwtSecrets: config.JwtSecrets{
-			Secret:        "test-secret-1234567890abcdef",
-			AccessExpire:  15 * time.Minute,
-			RefreshExpire: 24 * time.Hour,
-		},
-		Auth: config.AuthSettings{
-			Temp2FAExpire:       5 * time.Minute,
-			ActivateExpire:      15 * time.Minute,
-			PasswordResetExpire: 15 * time.Minute,
-		},
-		Server: config.ServerConfig{Name: "TestServer"},
+func authTestConfig() (config.AuthSettings, config.JwtSecrets, config.ServerConfig) {
+	auth := config.AuthSettings{
+		Temp2FAExpire:       5 * time.Minute,
+		ActivateExpire:      15 * time.Minute,
+		PasswordResetExpire: 15 * time.Minute,
 	}
+	jwt := config.JwtSecrets{
+		Secret:        "test-secret-1234567890abcdef",
+		AccessExpire:  15 * time.Minute,
+		RefreshExpire: 24 * time.Hour,
+	}
+	server := config.ServerConfig{Name: "TestServer"}
+	return auth, jwt, server
 }
 
 func TestAuthService_Login_No2FA(t *testing.T) {
-	cfg := authTestConfig()
+	auth, jwt, server := authTestConfig()
 	repo := new(MockAuthRepository)
-	service := NewAuthService(cfg, repo)
+	service := NewAuthService(repo, auth, jwt, server)
 
 	hashed, _ := pkg.DefaultPassword.Create("Password123!")
 	user := &model.User{
@@ -180,9 +179,9 @@ func TestAuthService_Login_No2FA(t *testing.T) {
 	assert.NotEmpty(t, tokenModel.AccessToken.Token)
 	assert.NotEmpty(t, tokenModel.RefreshToken.Token)
 
-	accessClaims, err := parseToken(cfg.JwtSecrets.Secret, tokenModel.AccessToken.Token)
+	accessClaims, err := parseToken(jwt.Secret, tokenModel.AccessToken.Token)
 	assert.NoError(t, err)
-	refreshClaims, err := parseToken(cfg.JwtSecrets.Secret, tokenModel.RefreshToken.Token)
+	refreshClaims, err := parseToken(jwt.Secret, tokenModel.RefreshToken.Token)
 	assert.NoError(t, err)
 	assert.Equal(t, "access", accessClaims.TokenType)
 	assert.Equal(t, "refresh", refreshClaims.TokenType)
@@ -192,9 +191,9 @@ func TestAuthService_Login_No2FA(t *testing.T) {
 }
 
 func TestAuthService_Login_With2FA(t *testing.T) {
-	cfg := authTestConfig()
+	auth, jwt, server := authTestConfig()
 	repo := new(MockAuthRepository)
-	service := NewAuthService(cfg, repo)
+	service := NewAuthService(repo, auth, jwt, server)
 
 	hashed, _ := pkg.DefaultPassword.Create("Password123!")
 	user := &model.User{
@@ -216,7 +215,7 @@ func TestAuthService_Login_With2FA(t *testing.T) {
 	assert.True(t, ok)
 	assert.NotEmpty(t, tempToken.Token)
 
-	claims, err := parseToken(cfg.JwtSecrets.Secret, tempToken.Token)
+	claims, err := parseToken(jwt.Secret, tempToken.Token)
 	assert.NoError(t, err)
 	assert.Equal(t, "temp_2fa", claims.TokenType)
 	assert.True(t, claims.MFAPending)
@@ -225,9 +224,9 @@ func TestAuthService_Login_With2FA(t *testing.T) {
 }
 
 func TestAuthService_GetAccessToken_Rotation(t *testing.T) {
-	cfg := authTestConfig()
+	auth, jwt, server := authTestConfig()
 	repo := new(MockAuthRepository)
-	service := NewAuthService(cfg, repo)
+	service := NewAuthService(repo, auth, jwt, server)
 
 	user := &model.User{
 		Model:      gorm.Model{ID: 1},
@@ -244,13 +243,13 @@ func TestAuthService_GetAccessToken_Rotation(t *testing.T) {
 		SID:       sessionID,
 		TokenType: "refresh",
 		JTI:       "jti-1",
-	}, cfg.JwtSecrets.RefreshExpire)
-	refreshToken, _ := createToken(cfg.JwtSecrets.Secret, refreshClaims)
+	}, jwt.RefreshExpire)
+	refreshToken, _ := createToken(jwt.Secret, refreshClaims)
 
 	session := &model.Session{
 		ID:               sessionID,
 		UserID:           user.ID,
-		RefreshTokenHash: hashToken(cfg.JwtSecrets.Secret, refreshToken),
+		RefreshTokenHash: hashToken(jwt.Secret, refreshToken),
 	}
 
 	repo.On("GetUserByUsernameAnyStatus", "alice").Return(user, nil)
@@ -263,7 +262,7 @@ func TestAuthService_GetAccessToken_Rotation(t *testing.T) {
 	assert.NotEmpty(t, tokenModel.RefreshToken.Token)
 	assert.NotEqual(t, refreshToken, tokenModel.RefreshToken.Token)
 
-	accessClaims, err := parseToken(cfg.JwtSecrets.Secret, tokenModel.AccessToken.Token)
+	accessClaims, err := parseToken(jwt.Secret, tokenModel.AccessToken.Token)
 	assert.NoError(t, err)
 	assert.Equal(t, "access", accessClaims.TokenType)
 
@@ -271,9 +270,9 @@ func TestAuthService_GetAccessToken_Rotation(t *testing.T) {
 }
 
 func TestAuthService_ValidateAccessToken_RefreshVersionMismatch(t *testing.T) {
-	cfg := authTestConfig()
+	auth, jwt, server := authTestConfig()
 	repo := new(MockAuthRepository)
-	service := NewAuthService(cfg, repo)
+	service := NewAuthService(repo, auth, jwt, server)
 
 	user := &model.User{
 		Model:               gorm.Model{ID: 1},
@@ -290,8 +289,8 @@ func TestAuthService_ValidateAccessToken_RefreshVersionMismatch(t *testing.T) {
 		SID:            "session-1",
 		RefreshVersion: 1,
 		TokenType:      "access",
-	}, cfg.JwtSecrets.AccessExpire)
-	accessToken, _ := createToken(cfg.JwtSecrets.Secret, accessClaims)
+	}, jwt.AccessExpire)
+	accessToken, _ := createToken(jwt.Secret, accessClaims)
 
 	repo.On("GetSession", "session-1").Return(&model.Session{
 		ID:     "session-1",

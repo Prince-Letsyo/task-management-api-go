@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
 )
 
@@ -65,9 +64,7 @@ func (m *MockUserRepository) update(id uint, updatedValues map[string]interface{
 
 func TestUserService_Save(t *testing.T) {
 	mockRepo := new(MockUserRepository)
-	appCfg := &config.AppCfg{}
-	service, _ := NewUserService(appCfg)
-	service.IUserRepository = mockRepo
+	service, _ := NewUserService(WithDatabaseUserRepository(mockRepo))
 
 	user := &types.User{
 		FirstName: "John",
@@ -86,9 +83,7 @@ func TestUserService_Save(t *testing.T) {
 
 func TestUserService_ViewByEmail(t *testing.T) {
 	mockRepo := new(MockUserRepository)
-	appCfg := &config.AppCfg{}
-	service, _ := NewUserService(appCfg)
-	service.IUserRepository = mockRepo
+	service, _ := NewUserService(WithDatabaseUserRepository(mockRepo))
 
 	email := "john@example.com"
 	expectedUser := &types.User{ID: 1, Email: email}
@@ -104,9 +99,7 @@ func TestUserService_ViewByEmail(t *testing.T) {
 
 func TestUserService_Modify(t *testing.T) {
 	mockRepo := new(MockUserRepository)
-	appCfg := &config.AppCfg{}
-	service, _ := NewUserService(appCfg)
-	service.IUserRepository = mockRepo
+	service, _ := NewUserService(WithDatabaseUserRepository(mockRepo))
 
 	id := uint(1)
 	updates := map[string]any{"name": "New Name"}

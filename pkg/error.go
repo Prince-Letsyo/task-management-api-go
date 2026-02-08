@@ -13,12 +13,36 @@ var (
 	ErrPageLimit = fmt.Errorf("invalid page limit [max=%v]", MaxPageLimit)
 
 	ErrBookName            = errors.New("invalid name")
-	ErrBookNotFound        = errors.New("book not found")
-	ErrUserNotFound        = errors.New("user not found")
-	ErrUserSettingNotFound = errors.New("user setting not found")
-	ErrProfileNotFound     = errors.New("profile not found")
-	ErrInternalServer      = errors.New("internal server error")
+	ErrBookNotFound        = NewAppError(fiber.StatusNotFound, "book not found")
+	ErrUserNotFound        = NewAppError(fiber.StatusNotFound, "user not found")
+	ErrUserSettingNotFound = NewAppError(fiber.StatusNotFound, "user setting not found")
+	ErrProfileNotFound     = NewAppError(fiber.StatusNotFound, "profile not found")
+	ErrInternalServer      = NewAppError(fiber.StatusInternalServerError, "internal server error")
 )
+
+type AppError struct {
+	Code    int
+	Message string
+}
+
+func (e *AppError) Error() string {
+	return e.Message
+}
+
+func (e *AppError) StatusCode() int {
+	return e.Code
+}
+
+func NewAppError(code int, message string) *AppError {
+	return &AppError{
+		Code:    code,
+		Message: message,
+	}
+}
+
+type statusCoder interface {
+	StatusCode() int
+}
 
 type httpError struct {
 	Statuscode int    `json:"statusCode"`
@@ -26,12 +50,19 @@ type httpError struct {
 }
 
 func ErrorHandler(c *fiber.Ctx, err error) error {
-	// Statuscode defaults to 500
+	// Status code defaults to 500
 	code := fiber.StatusInternalServerError
 
-	// Check if it's an fiber.Error type
-	if e, ok := err.(*fiber.Error); ok {
-		code = e.Code
+	// Check for specialized error types
+	var (
+		fiberErr *fiber.Error
+		scErr    statusCoder
+	)
+
+	if errors.As(err, &fiberErr) {
+		code = fiberErr.Code
+	} else if errors.As(err, &scErr) {
+		code = scErr.StatusCode()
 	}
 
 	return c.Status(code).JSON(&httpError{

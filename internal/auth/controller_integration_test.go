@@ -15,11 +15,11 @@ import (
 	"github.com/Prince-Letsyo/task-management-api-go/internal/model"
 )
 
-type MockAuthService struct {
+type MockAccountService struct {
 	mock.Mock
 }
 
-func (m *MockAuthService) SignUp(userCreate *UserCreateRequest) (*model.User, string, time.Time, error) {
+func (m *MockAccountService) SignUp(userCreate *UserCreateRequest) (*model.User, string, time.Time, error) {
 	args := m.Called(userCreate)
 	if args.Get(0) == nil {
 		return nil, "", time.Time{}, args.Error(3)
@@ -27,7 +27,7 @@ func (m *MockAuthService) SignUp(userCreate *UserCreateRequest) (*model.User, st
 	return args.Get(0).(*model.User), args.String(1), args.Get(2).(time.Time), args.Error(3)
 }
 
-func (m *MockAuthService) SendActivationEmail(email string) (*model.User, string, time.Time, error) {
+func (m *MockAccountService) SendActivationEmail(email string) (*model.User, string, time.Time, error) {
 	args := m.Called(email)
 	if args.Get(0) == nil {
 		return nil, "", time.Time{}, args.Error(3)
@@ -35,12 +35,37 @@ func (m *MockAuthService) SendActivationEmail(email string) (*model.User, string
 	return args.Get(0).(*model.User), args.String(1), args.Get(2).(time.Time), args.Error(3)
 }
 
-func (m *MockAuthService) ActivateAccount(token string) (*model.User, error) {
+func (m *MockAccountService) ActivateAccount(token string) (*model.User, error) {
 	args := m.Called(token)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*model.User), args.Error(1)
+}
+
+func (m *MockAccountService) RequestPasswordReset(email string) (*model.User, string, time.Time, error) {
+	args := m.Called(email)
+	if args.Get(0) == nil {
+		return nil, "", time.Time{}, args.Error(3)
+	}
+	return args.Get(0).(*model.User), args.String(1), args.Get(2).(time.Time), args.Error(3)
+}
+
+func (m *MockAccountService) ResetPassword(token string, email string, password string) (*model.User, error) {
+	args := m.Called(token, email, password)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.User), args.Error(1)
+}
+
+func (m *MockAccountService) ChangeEmail(username string, newEmail string, password string) error {
+	args := m.Called(username, newEmail, password)
+	return args.Error(0)
+}
+
+type MockAuthService struct {
+	mock.Mock
 }
 
 func (m *MockAuthService) Login(username string, password string, userAgent *string, ipAddress *string) (*UserResponse, error) {
@@ -67,22 +92,6 @@ func (m *MockAuthService) GetAccessToken(refreshToken string) (*TokenModel, erro
 	return args.Get(0).(*TokenModel), args.Error(1)
 }
 
-func (m *MockAuthService) RequestPasswordReset(email string) (*model.User, string, time.Time, error) {
-	args := m.Called(email)
-	if args.Get(0) == nil {
-		return nil, "", time.Time{}, args.Error(3)
-	}
-	return args.Get(0).(*model.User), args.String(1), args.Get(2).(time.Time), args.Error(3)
-}
-
-func (m *MockAuthService) ResetPassword(token string, email string, password string) (*model.User, error) {
-	args := m.Called(token, email, password)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.User), args.Error(1)
-}
-
 func (m *MockAuthService) Logout(refreshToken string) error {
 	args := m.Called(refreshToken)
 	return args.Error(0)
@@ -99,11 +108,6 @@ func (m *MockAuthService) ListSessions(userID uint) ([]model.Session, error) {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]model.Session), args.Error(1)
-}
-
-func (m *MockAuthService) ChangeEmail(username string, newEmail string, password string) error {
-	args := m.Called(username, newEmail, password)
-	return args.Error(0)
 }
 
 func (m *MockAuthService) AdminRevokeSessions(userID uint) error {
@@ -137,7 +141,7 @@ func TestAuthController_SignIn(t *testing.T) {
 
 	mockSvc := new(MockAuthService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockSvc, nil, nil)
 
 	mockSvc.On("Login", "alice", "Password123!", mock.Anything, mock.Anything).
 		Return(&UserResponse{
@@ -172,7 +176,7 @@ func TestAuthController_RefreshRotation(t *testing.T) {
 
 	mockSvc := new(MockAuthService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockSvc, nil, nil)
 
 	mockSvc.On("GetAccessToken", "refresh-token").
 		Return(&TokenModel{
@@ -204,7 +208,7 @@ func TestAuthController_ListSessions_ValidatesSession(t *testing.T) {
 
 	mockSvc := new(MockAuthService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockSvc, nil, nil)
 
 	mockSvc.On("ValidateAccessToken", "valid-access").
 		Return(&AuthClaims{UserID: 1, Username: "alice"}, nil)
@@ -229,7 +233,7 @@ func TestAuthController_ListSessions_Revoked(t *testing.T) {
 
 	mockSvc := new(MockAuthService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockSvc, nil, nil)
 
 	mockSvc.On("ValidateAccessToken", "revoked-access").
 		Return(nil, assert.AnError)
@@ -252,7 +256,7 @@ func TestAuthController_LogoutAll_ValidatesSession(t *testing.T) {
 
 	mockSvc := new(MockAuthService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockSvc, nil, nil)
 
 	mockSvc.On("ValidateAccessToken", "valid-access").
 		Return(&AuthClaims{UserID: 7, Username: "alice"}, nil)
@@ -274,13 +278,14 @@ func TestAuthController_ChangeEmail_ValidatesSession(t *testing.T) {
 		JwtSecrets: config.JwtSecrets{Secret: "test-secret"},
 	}
 
-	mockSvc := new(MockAuthService)
+	mockAuthSvc := new(MockAuthService)
+	mockAccountSvc := new(MockAccountService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockAuthSvc, mockAccountSvc, nil)
 
-	mockSvc.On("ValidateAccessToken", "valid-access").
+	mockAuthSvc.On("ValidateAccessToken", "valid-access").
 		Return(&AuthClaims{UserID: 1, Username: "alice"}, nil)
-	mockSvc.On("ChangeEmail", "alice", "alice2@example.com", "Password123!").Return(nil)
+	mockAccountSvc.On("ChangeEmail", "alice", "alice2@example.com", "Password123!").Return(nil)
 
 	body := []byte(`{"new_email":"alice2@example.com","password":"Password123!"}`)
 	req := httptest.NewRequest("POST", "/change-email", bytes.NewReader(body))
@@ -291,7 +296,8 @@ func TestAuthController_ChangeEmail_ValidatesSession(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 
-	mockSvc.AssertExpectations(t)
+	mockAuthSvc.AssertExpectations(t)
+	mockAccountSvc.AssertExpectations(t)
 }
 
 func TestAuthController_EnableDisable2FA_ValidatesSession(t *testing.T) {
@@ -302,7 +308,7 @@ func TestAuthController_EnableDisable2FA_ValidatesSession(t *testing.T) {
 
 	mockSvc := new(MockAuthService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockSvc, nil, nil)
 
 	mockSvc.On("ValidateAccessToken", "valid-access").
 		Return(&AuthClaims{UserID: 1, Username: "alice"}, nil)
@@ -333,7 +339,7 @@ func TestAuthController_AdminRevokeSessions_APIKey(t *testing.T) {
 
 	mockSvc := new(MockAuthService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockSvc, nil, nil)
 
 	mockSvc.On("AdminRevokeSessions", uint(9)).Return(nil)
 
@@ -355,7 +361,7 @@ func TestAuthController_AdminRevokeSessions_InvalidAPIKey(t *testing.T) {
 
 	mockSvc := new(MockAuthService)
 	authC := Auth{router: app}
-	newAuthControllerWithService(authC, cfg, mockSvc)
+	newAuthControllerWithService(authC, cfg, mockSvc, nil, nil)
 
 	req := httptest.NewRequest("POST", "/admin/revoke-sessions/9", nil)
 	req.Header.Set("X-API-Key", "wrong-key")

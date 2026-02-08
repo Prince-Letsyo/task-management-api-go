@@ -1,14 +1,13 @@
-// Package profile for user profile repository implementations.
 package profile
 
 import (
 	"errors"
 
-	"github.com/Prince-Letsyo/task-management-api-go/config"
-	"github.com/Prince-Letsyo/task-management-api-go/pkg"
+	"gorm.io/gorm"
+
 	"github.com/Prince-Letsyo/task-management-api-go/internal/model"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
-	"gorm.io/gorm"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
 
 type IProfileRepository interface {
@@ -17,7 +16,7 @@ type IProfileRepository interface {
 }
 
 type DBProfileRepository struct {
-	*config.AppCfg
+	db *gorm.DB
 }
 
 func (dbProfileRepository *DBProfileRepository) typeModel(profile *types.Profile) *model.Profile {
@@ -61,8 +60,8 @@ func (dbProfileRepository *DBProfileRepository) modelType(profileModel *model.Pr
 }
 
 func (dbProfileRepository *DBProfileRepository) retrieve(userID uint, profile *types.Profile) (*types.Profile, error) {
-	var profileModel *model.Profile
-	if err := dbProfileRepository.Database.Model(&model.Profile{}).Preload("User").
+	var profileModel = &model.Profile{}
+	if err := dbProfileRepository.db.Model(&model.Profile{}).Preload("User").
 		Where("user_id = ? ", userID).First(profileModel); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrProfileNotFound
@@ -79,7 +78,7 @@ func (dbProfileRepository *DBProfileRepository) retrieve(userID uint, profile *t
 func (dbProfileRepository *DBProfileRepository) update(id uint, profile *types.Profile) (*types.Profile, error) {
 	profileModel := dbProfileRepository.typeModel(profile)
 
-	if err := dbProfileRepository.Database.Model(&model.Profile{}).
+	if err := dbProfileRepository.db.Model(&model.Profile{}).
 		Where("id = ? ", id).
 		Updates(profileModel).First(profileModel); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
@@ -91,6 +90,6 @@ func (dbProfileRepository *DBProfileRepository) update(id uint, profile *types.P
 	return profile, nil
 }
 
-func NewDBProfileRepository(appCfg *config.AppCfg) IProfileRepository {
-	return &DBProfileRepository{AppCfg: appCfg}
+func NewDBProfileRepository(db *gorm.DB) IProfileRepository {
+	return &DBProfileRepository{db: db}
 }

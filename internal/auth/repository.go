@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 
-	"github.com/Prince-Letsyo/task-management-api-go/config"
 	"github.com/Prince-Letsyo/task-management-api-go/internal/model"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
@@ -33,15 +32,15 @@ type AuthRepository interface {
 }
 
 type DBAuthRepository struct {
-	*config.AppCfg
+	db *gorm.DB
 }
 
-func NewDBAuthRepository(appCfg *config.AppCfg) *DBAuthRepository {
-	return &DBAuthRepository{AppCfg: appCfg}
+func NewDBAuthRepository(db *gorm.DB) *DBAuthRepository {
+	return &DBAuthRepository{db: db}
 }
 
 func (r *DBAuthRepository) CreateUser(user *model.User) (*model.User, error) {
-	if err := r.Database.Create(user); err.Error != nil {
+	if err := r.db.Create(user); err.Error != nil {
 		return nil, err.Error
 	}
 	return user, nil
@@ -49,7 +48,7 @@ func (r *DBAuthRepository) CreateUser(user *model.User) (*model.User, error) {
 
 func (r *DBAuthRepository) GetUserByEmail(email string) (*model.User, error) {
 	user := &model.User{}
-	if err := r.Database.Where(&model.User{Email: email}).First(user); err.Error != nil {
+	if err := r.db.Where(&model.User{Email: email}).First(user); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
@@ -60,7 +59,7 @@ func (r *DBAuthRepository) GetUserByEmail(email string) (*model.User, error) {
 
 func (r *DBAuthRepository) GetUserByUsername(username string) (*model.User, error) {
 	user := &model.User{}
-	if err := r.Database.Where(&model.User{UserName: username, IsVerified: true}).First(user); err.Error != nil {
+	if err := r.db.Where(&model.User{UserName: username, IsVerified: true}).First(user); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
@@ -71,7 +70,7 @@ func (r *DBAuthRepository) GetUserByUsername(username string) (*model.User, erro
 
 func (r *DBAuthRepository) GetUserByUsernameAnyStatus(username string) (*model.User, error) {
 	user := &model.User{}
-	if err := r.Database.Where(&model.User{UserName: username}).First(user); err.Error != nil {
+	if err := r.db.Where(&model.User{UserName: username}).First(user); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
@@ -82,14 +81,14 @@ func (r *DBAuthRepository) GetUserByUsernameAnyStatus(username string) (*model.U
 
 func (r *DBAuthRepository) ActivateUserAccount(username string) (*model.User, error) {
 	user := &model.User{}
-	if err := r.Database.Where(&model.User{UserName: username}).First(user); err.Error != nil {
+	if err := r.db.Where(&model.User{UserName: username}).First(user); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
 		return nil, err.Error
 	}
 	user.IsVerified = true
-	if err := r.Database.Save(user); err.Error != nil {
+	if err := r.db.Save(user); err.Error != nil {
 		return nil, err.Error
 	}
 	return user, nil
@@ -97,14 +96,14 @@ func (r *DBAuthRepository) ActivateUserAccount(username string) (*model.User, er
 
 func (r *DBAuthRepository) UpdateUserPasswordByEmail(email string, newPassword string) (*model.User, error) {
 	user := &model.User{}
-	if err := r.Database.Where(&model.User{Email: email}).First(user); err.Error != nil {
+	if err := r.db.Where(&model.User{Email: email}).First(user); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
 		return nil, err.Error
 	}
 	user.Password = newPassword
-	if err := r.Database.Save(user); err.Error != nil {
+	if err := r.db.Save(user); err.Error != nil {
 		return nil, err.Error
 	}
 	return user, nil
@@ -112,14 +111,14 @@ func (r *DBAuthRepository) UpdateUserPasswordByEmail(email string, newPassword s
 
 func (r *DBAuthRepository) UpdateUserEmail(userID uint, newEmail string) (*model.User, error) {
 	user := &model.User{}
-	if err := r.Database.First(user, userID); err.Error != nil {
+	if err := r.db.First(user, userID); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
 		return nil, err.Error
 	}
 	user.Email = newEmail
-	if err := r.Database.Save(user); err.Error != nil {
+	if err := r.db.Save(user); err.Error != nil {
 		return nil, err.Error
 	}
 	return user, nil
@@ -127,7 +126,7 @@ func (r *DBAuthRepository) UpdateUserEmail(userID uint, newEmail string) (*model
 
 func (r *DBAuthRepository) Enable2FA(username string, totpSecret string) (*model.User, error) {
 	user := &model.User{}
-	if err := r.Database.Where(&model.User{UserName: username}).First(user); err.Error != nil {
+	if err := r.db.Where(&model.User{UserName: username}).First(user); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
@@ -135,7 +134,7 @@ func (r *DBAuthRepository) Enable2FA(username string, totpSecret string) (*model
 	}
 	user.Is2FAEnabled = true
 	user.TOTPSecret = &totpSecret
-	if err := r.Database.Save(user); err.Error != nil {
+	if err := r.db.Save(user); err.Error != nil {
 		return nil, err.Error
 	}
 	return user, nil
@@ -143,7 +142,7 @@ func (r *DBAuthRepository) Enable2FA(username string, totpSecret string) (*model
 
 func (r *DBAuthRepository) Disable2FA(username string) (*model.User, error) {
 	user := &model.User{}
-	if err := r.Database.Where(&model.User{UserName: username}).First(user); err.Error != nil {
+	if err := r.db.Where(&model.User{UserName: username}).First(user); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
@@ -151,14 +150,14 @@ func (r *DBAuthRepository) Disable2FA(username string) (*model.User, error) {
 	}
 	user.Is2FAEnabled = false
 	user.TOTPSecret = nil
-	if err := r.Database.Save(user); err.Error != nil {
+	if err := r.db.Save(user); err.Error != nil {
 		return nil, err.Error
 	}
 	return user, nil
 }
 
 func (r *DBAuthRepository) IncrementRefreshVersion(userID uint) error {
-	if err := r.Database.Model(&model.User{}).
+	if err := r.db.Model(&model.User{}).
 		Where("id = ?", userID).
 		UpdateColumn("refresh_token_version", gorm.Expr("refresh_token_version + 1")); err.Error != nil {
 		return err.Error
@@ -167,7 +166,7 @@ func (r *DBAuthRepository) IncrementRefreshVersion(userID uint) error {
 }
 
 func (r *DBAuthRepository) CreateSession(session *model.Session) error {
-	if err := r.Database.Create(session); err.Error != nil {
+	if err := r.db.Create(session); err.Error != nil {
 		return err.Error
 	}
 	return nil
@@ -175,7 +174,7 @@ func (r *DBAuthRepository) CreateSession(session *model.Session) error {
 
 func (r *DBAuthRepository) GetSession(sessionID string) (*model.Session, error) {
 	session := &model.Session{}
-	if err := r.Database.Where(&model.Session{ID: sessionID}).First(session); err.Error != nil {
+	if err := r.db.Where(&model.Session{ID: sessionID}).First(session); err.Error != nil {
 		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 			return nil, pkg.ErrUserNotFound
 		}
@@ -186,7 +185,7 @@ func (r *DBAuthRepository) GetSession(sessionID string) (*model.Session, error) 
 
 func (r *DBAuthRepository) UpdateSessionToken(sessionID string, refreshTokenHash string) error {
 	now := time.Now().UTC()
-	if err := r.Database.Model(&model.Session{}).
+	if err := r.db.Model(&model.Session{}).
 		Where("id = ?", sessionID).
 		Updates(map[string]interface{}{
 			"refresh_token_hash": refreshTokenHash,
@@ -199,7 +198,7 @@ func (r *DBAuthRepository) UpdateSessionToken(sessionID string, refreshTokenHash
 
 func (r *DBAuthRepository) UpdateSessionLastUsed(sessionID string) error {
 	now := time.Now().UTC()
-	if err := r.Database.Model(&model.Session{}).
+	if err := r.db.Model(&model.Session{}).
 		Where("id = ?", sessionID).
 		Update("last_used_at", &now); err.Error != nil {
 		return err.Error
@@ -209,7 +208,7 @@ func (r *DBAuthRepository) UpdateSessionLastUsed(sessionID string) error {
 
 func (r *DBAuthRepository) RevokeSession(sessionID string) error {
 	now := time.Now().UTC()
-	if err := r.Database.Model(&model.Session{}).
+	if err := r.db.Model(&model.Session{}).
 		Where("id = ?", sessionID).
 		Update("revoked_at", &now); err.Error != nil {
 		return err.Error
@@ -219,7 +218,7 @@ func (r *DBAuthRepository) RevokeSession(sessionID string) error {
 
 func (r *DBAuthRepository) RevokeUserSessions(userID uint) error {
 	now := time.Now().UTC()
-	if err := r.Database.Model(&model.Session{}).
+	if err := r.db.Model(&model.Session{}).
 		Where("user_id = ? AND revoked_at IS NULL", userID).
 		Update("revoked_at", &now); err.Error != nil {
 		return err.Error
@@ -229,7 +228,7 @@ func (r *DBAuthRepository) RevokeUserSessions(userID uint) error {
 
 func (r *DBAuthRepository) ListSessions(userID uint) ([]model.Session, error) {
 	sessions := []model.Session{}
-	if err := r.Database.Where("user_id = ?", userID).Order("created_at DESC").Find(&sessions); err.Error != nil {
+	if err := r.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&sessions); err.Error != nil {
 		return nil, err.Error
 	}
 	return sessions, nil

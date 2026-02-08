@@ -1,26 +1,28 @@
 package user
 
 import (
-	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/oarkflow/log"
+
 	"github.com/Prince-Letsyo/task-management-api-go/internal/types"
-	"github.com/pkg/errors"
+	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
 
 type UserService struct {
-	IUserRepository
-	*config.AppCfg
+	repo IUserRepository
 }
 
 func (us *UserService) Save(user *types.User) (*types.User, error) {
-	u, err := us.store(user)
+	u, err := us.repo.store(user)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot create user")
+		log.Error().Err(err).Str("email", user.Email).Msg("failed to save user")
+		return nil, pkg.NewAppError(500, "cannot create user")
 	}
+	log.Info().Uint("user_id", u.ID).Msg("user saved successfully")
 	return u, nil
 }
 
 func (us *UserService) ViewByID(id uint, user *types.User) (*types.User, error) {
-	u, errUser := us.retrieveByID(id, user)
+	u, errUser := us.repo.retrieveByID(id, user)
 	if errUser != nil {
 		return nil, errUser
 	}
@@ -28,7 +30,7 @@ func (us *UserService) ViewByID(id uint, user *types.User) (*types.User, error) 
 }
 
 func (us *UserService) ViewByEmail(email string, user *types.User) (*types.User, error) {
-	u, errUser := us.retrieveByEmail(email, user)
+	u, errUser := us.repo.retrieveByEmail(email, user)
 	if errUser != nil {
 		return nil, errUser
 	}
@@ -36,7 +38,7 @@ func (us *UserService) ViewByEmail(email string, user *types.User) (*types.User,
 }
 
 func (us *UserService) ViewVerifiedUserByEmail(email string, user *types.User) (*types.User, error) {
-	u, errUser := us.retrieveVerifiedUserByEmail(email, user)
+	u, errUser := us.repo.retrieveVerifiedUserByEmail(email, user)
 	if errUser != nil {
 		return nil, errUser
 	}
@@ -44,7 +46,7 @@ func (us *UserService) ViewVerifiedUserByEmail(email string, user *types.User) (
 }
 
 func (us *UserService) List(filters *types.UserFilters) (*types.UserPage, error) {
-	p, err := us.retrievePage(filters)
+	p, err := us.repo.retrievePage(filters)
 	if err != nil {
 		return nil, err
 	}
@@ -52,20 +54,20 @@ func (us *UserService) List(filters *types.UserFilters) (*types.UserPage, error)
 }
 
 func (us *UserService) Modify(id uint, updatedValues map[string]interface{}) (*types.User, error) {
-	b, err := us.update(id, updatedValues)
+	b, err := us.repo.update(id, updatedValues)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot update user")
+		log.Error().Err(err).Uint("user_id", id).Msg("failed to update user")
+		return nil, pkg.NewAppError(500, "cannot update user")
 	}
+	log.Info().Uint("user_id", b.ID).Msg("user updated successfully")
 	return b, nil
 }
 
 type UserServiceConfiguration func(us *UserService) error
 
 // NewUserService returns new UserService.
-func NewUserService(appCfg *config.AppCfg, cfgs ...UserServiceConfiguration) (*UserService, error) {
-	us := &UserService{
-		AppCfg: appCfg,
-	}
+func NewUserService(cfgs ...UserServiceConfiguration) (*UserService, error) {
+	us := &UserService{}
 
 	for _, cfg := range cfgs {
 		if err := cfg(us); err != nil {
@@ -75,9 +77,9 @@ func NewUserService(appCfg *config.AppCfg, cfgs ...UserServiceConfiguration) (*U
 	return us, nil
 }
 
-func WithDatabaseUserRepository() UserServiceConfiguration {
+func WithDatabaseUserRepository(repo IUserRepository) UserServiceConfiguration {
 	return func(us *UserService) error {
-		us.IUserRepository = NewDBUser(us.AppCfg)
+		us.repo = repo
 		return nil
 	}
 }

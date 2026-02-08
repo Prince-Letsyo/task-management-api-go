@@ -77,23 +77,22 @@ func (controller *profileController) updateProfile() fiber.Handler {
 }
 
 func LoadProfileRoute(router fiber.Router, appCfg *config.AppCfg) {
+	userRepo := user.NewDBUser(appCfg.Database.DB)
 	userService, err := user.NewUserService(
-		appCfg,
-		user.WithDatabaseUserRepository())
+		user.WithDatabaseUserRepository(userRepo))
 	if err != nil {
 		panic(err.Error())
 	}
 
+	profileRepo := NewDBProfileRepository(appCfg.Database.DB)
 	profileService, err := newProfileService(
-		appCfg,
-		withDatabaseProfileRepository(
-			NewDBProfileRepository(appCfg),
-		))
+		withDatabaseProfileRepository(profileRepo))
 	if err != nil {
 		panic(err.Error())
 	}
 
-	authService := auth.NewAuthService(appCfg, auth.NewDBAuthRepository(appCfg))
+	authRepo := auth.NewDBAuthRepository(appCfg.Database.DB)
+	authService := auth.NewAuthService(authRepo, appCfg.Auth, appCfg.JwtSecrets, appCfg.Server)
 
 	newProfileController(Profile{
 		router:         router.Group("/profile/"),

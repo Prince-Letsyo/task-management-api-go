@@ -27,6 +27,7 @@ type AppCfg struct {
 	Mail       Mail           `yaml:"mail"`
 	Redis      Redis          `json:"redis" yaml:"redis" env-prefix:"REDIS_"`
 	Postgres   Postgres       `json:"postgres" yaml:"postgres" env-prefix:"POSTGRES_"`
+	RabbitMQ   RabbitMQConfig `json:"rabbitmq" yaml:"rabbitmq" env-prefix:"RABBITMQ_"`
 	Swagger    Swagger        `json:"swagger" yaml:"swagger" env-prefix:"SWAGGER_"`
 	Log        LogConfig      `yaml:"log"`
 	Cache      CacheConfig    `yaml:"cache"`

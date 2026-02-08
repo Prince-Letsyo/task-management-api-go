@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Prince-Letsyo/task-management-api-go/config"
+	"github.com/Prince-Letsyo/task-management-api-go/internal/queue"
 	"github.com/Prince-Letsyo/task-management-api-go/pkg"
 )
 
@@ -34,7 +35,9 @@ type Auth struct {
 type authController struct {
 	Auth
 	*config.AppCfg
-	service IAuthService
+	authService    IAuthService
+	accountService IAccountService
+	queue          *queue.WorkerClient
 }
 
 func (controller *authController) signUp() fiber.Handler {
@@ -53,21 +56,20 @@ func (controller *authController) signUp() fiber.Handler {
 		if !validation.IsValid {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": validation.Errors[0]})
 		}
-		_, token, _, err := controller.service.SignUp(req)
+		_, token, _, err := controller.accountService.SignUp(req)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		activationLink := controller.activationLink(c, token)
-		go controller.AppCfg.Mail.Send(
-			req.Email,
-			"Activate Your Account",
-			controller.AppCfg.Mail.PrepareHTML("emails/confirm", fiber.Map{
+		_ = controller.queue.EnqueueEmail(queue.EmailPayload{
+			To:      req.Email,
+			Subject: "Activate Your Account",
+			View:    "emails/confirm",
+			Data: fiber.Map{
 				"Title":        "Email Confirmation",
 				"confirm_link": activationLink,
-			}),
-			"",
-			controller.AppCfg.Mail.FromAddress,
-		)
+			},
+		})
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 			"message": "User created successfully. Please check your email to activate your account.",
 		})
@@ -84,7 +86,7 @@ func (controller *authController) signIn() fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
 		userAgent, ipAddr := requestMeta(c)
-		resp, err := controller.service.Login(req.UserName, req.Password, userAgent, ipAddr)
+		resp, err := controller.authService.Login(req.UserName, req.Password, userAgent, ipAddr)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -102,7 +104,7 @@ func (controller *authController) signInMFA() fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
 		userAgent, ipAddr := requestMeta(c)
-		resp, err := controller.service.Login2FA(req.Token, req.TOTPToken, userAgent, ipAddr)
+		resp, err := controller.authService.Login2FA(req.Token, req.TOTPToken, userAgent, ipAddr)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -119,7 +121,7 @@ func (controller *authController) getAccessToken() fiber.Handler {
 		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
-		token, err := controller.service.GetAccessToken(req.Token)
+		token, err := controller.authService.GetAccessToken(req.Token)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -133,7 +135,7 @@ func (controller *authController) activateAccount() fiber.Handler {
 		if token == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "missing token"})
 		}
-		_, err := controller.service.ActivateAccount(token)
+		_, err := controller.accountService.ActivateAccount(token)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -150,21 +152,20 @@ func (controller *authController) sendActivationEmail() fiber.Handler {
 		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
-		_, token, _, err := controller.service.SendActivationEmail(req.Email)
+		_, token, _, err := controller.accountService.SendActivationEmail(req.Email)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		activationLink := controller.activationLink(c, token)
-		go controller.AppCfg.Mail.Send(
-			req.Email,
-			"Activate Your Account",
-			controller.AppCfg.Mail.PrepareHTML("emails/confirm", fiber.Map{
+		_ = controller.queue.EnqueueEmail(queue.EmailPayload{
+			To:      req.Email,
+			Subject: "Activate Your Account",
+			View:    "emails/confirm",
+			Data: fiber.Map{
 				"Title":        "Email Confirmation",
 				"confirm_link": activationLink,
-			}),
-			"",
-			controller.AppCfg.Mail.FromAddress,
-		)
+			},
+		})
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Activation email sent successfully. Please check your email."})
 	}
 }
@@ -178,21 +179,20 @@ func (controller *authController) requestPasswordReset() fiber.Handler {
 		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
-		_, token, _, err := controller.service.RequestPasswordReset(req.Email)
+		_, token, _, err := controller.accountService.RequestPasswordReset(req.Email)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		resetLink := controller.resetLink(c, token)
-		go controller.AppCfg.Mail.Send(
-			req.Email,
-			"Password Reset Request",
-			controller.AppCfg.Mail.PrepareHTML("emails/password-reset", fiber.Map{
+		_ = controller.queue.EnqueueEmail(queue.EmailPayload{
+			To:      req.Email,
+			Subject: "Password Reset Request",
+			View:    "emails/password-reset",
+			Data: fiber.Map{
 				"Title":      "Password Reset",
 				"reset_link": resetLink,
-			}),
-			"",
-			controller.AppCfg.Mail.FromAddress,
-		)
+			},
+		})
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "A password reset link has been sent to your email."})
 	}
 }
@@ -209,7 +209,7 @@ func (controller *authController) resetPassword() fiber.Handler {
 		if req.PasswordOne != req.PasswordTwo {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "passwords do not match"})
 		}
-		_, err := controller.service.ResetPassword(req.Token, req.Email, req.PasswordOne)
+		_, err := controller.accountService.ResetPassword(req.Token, req.Email, req.PasswordOne)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -226,7 +226,7 @@ func (controller *authController) logout() fiber.Handler {
 		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
-		if err := controller.service.Logout(req.Token); err != nil {
+		if err := controller.authService.Logout(req.Token); err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Logged out"})
@@ -235,11 +235,11 @@ func (controller *authController) logout() fiber.Handler {
 
 func (controller *authController) logoutAll() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.authService)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
-		if err := controller.service.LogoutAll(claims.UserID); err != nil {
+		if err := controller.authService.LogoutAll(claims.UserID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Logged out from all sessions"})
@@ -248,11 +248,11 @@ func (controller *authController) logoutAll() fiber.Handler {
 
 func (controller *authController) listSessions() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.authService)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
-		sessions, err := controller.service.ListSessions(claims.UserID)
+		sessions, err := controller.authService.ListSessions(claims.UserID)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -273,7 +273,7 @@ func (controller *authController) listSessions() fiber.Handler {
 
 func (controller *authController) changeEmail() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.authService)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -284,7 +284,7 @@ func (controller *authController) changeEmail() fiber.Handler {
 		if errs := pkg.ValidateStruct(req); len(errs) > 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"errors": errs})
 		}
-		if err := controller.service.ChangeEmail(claims.Username, req.NewEmail, req.Password); err != nil {
+		if err := controller.accountService.ChangeEmail(claims.Username, req.NewEmail, req.Password); err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Email updated successfully"})
@@ -301,7 +301,7 @@ func (controller *authController) adminRevokeSessions() fiber.Handler {
 		if err != nil || userID <= 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user id"})
 		}
-		if err := controller.service.AdminRevokeSessions(uint(userID)); err != nil {
+		if err := controller.authService.AdminRevokeSessions(uint(userID)); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "User sessions revoked"})
@@ -310,11 +310,11 @@ func (controller *authController) adminRevokeSessions() fiber.Handler {
 
 func (controller *authController) enable2FA() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.authService)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
-		secret, qr, err := controller.service.Enable2FA(claims.Username)
+		secret, qr, err := controller.authService.Enable2FA(claims.Username)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -328,29 +328,33 @@ func (controller *authController) enable2FA() fiber.Handler {
 
 func (controller *authController) disable2FA() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		claims, err := AccessClaimsFromRequestWithSession(c, controller.service)
+		claims, err := AccessClaimsFromRequestWithSession(c, controller.authService)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
-		if err := controller.service.Disable2FA(claims.Username); err != nil {
+		if err := controller.authService.Disable2FA(claims.Username); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "2FA disabled"})
 	}
 }
 
-func LoadAuthRoutes(router fiber.Router, appCfg *config.AppCfg) {
+func LoadAuthRoutes(router fiber.Router, appCfg *config.AppCfg, qClient *queue.WorkerClient) {
+	repo := NewDBAuthRepository(appCfg.Database.DB)
+	authSvc := NewAuthService(repo, appCfg.Auth, appCfg.JwtSecrets, appCfg.Server)
+	accountSvc := NewAccountService(repo, appCfg.Auth, appCfg.JwtSecrets)
 	newAuthController(Auth{
 		router: router.Group("/auth/"),
-	}, appCfg)
+	}, appCfg, authSvc, accountSvc, qClient)
 }
 
-func newAuthController(authC Auth, appCfg *config.AppCfg) IAuthController {
-	repo := NewDBAuthRepository(appCfg)
+func newAuthController(authC Auth, appCfg *config.AppCfg, authSvc IAuthService, accountSvc IAccountService, qClient *queue.WorkerClient) IAuthController {
 	controller := &authController{
-		Auth:    authC,
-		AppCfg:  appCfg,
-		service: NewAuthService(appCfg, repo),
+		Auth:           authC,
+		AppCfg:         appCfg,
+		authService:    authSvc,
+		accountService: accountSvc,
+		queue:          qClient,
 	}
 
 	controller.registerRoutes()
@@ -389,11 +393,13 @@ func requestMeta(c *fiber.Ctx) (*string, *string) {
 	return uaPtr, ipPtr
 }
 
-func newAuthControllerWithService(authC Auth, appCfg *config.AppCfg, service IAuthService) IAuthController {
+func newAuthControllerWithService(authC Auth, appCfg *config.AppCfg, authSvc IAuthService, accountSvc IAccountService, qClient *queue.WorkerClient) IAuthController {
 	controller := &authController{
-		Auth:    authC,
-		AppCfg:  appCfg,
-		service: service,
+		Auth:           authC,
+		AppCfg:         appCfg,
+		authService:    authSvc,
+		accountService: accountSvc,
+		queue:          qClient,
 	}
 	controller.registerRoutes()
 	return controller

@@ -97,3 +97,14 @@ type Swagger struct {
 	Host     string `json:"host" yaml:"host" env:"HOST" env-default:"127.0.0.1:8888"`
 	BasePath string `json:"base_path" yaml:"basePath" env:"BASE_PATH" env-default:"/api"`
 }
+
+type RabbitMQConfig struct {
+	Host     string `json:"host" yaml:"host" env:"RABBITMQ_HOST" env-default:"127.0.0.1"`
+	Port     int    `json:"port" yaml:"port" env:"RABBITMQ_PORT" env-default:"5672"`
+	User     string `json:"user" yaml:"user" env:"RABBITMQ_USER" env-default:"guest"`
+	Password string `json:"password" yaml:"password" env:"RABBITMQ_PASS" env-default:"guest"`
+}
+
+func (r RabbitMQConfig) URL() string {
+	return fmt.Sprintf("amqp://%s:%s@%s:%d/", r.User, r.Password, r.Host, r.Port)
+}
